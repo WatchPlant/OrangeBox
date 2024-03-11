@@ -1,0 +1,8 @@
+[Unit]
+Description=Check available disk space and clean it
+
+[Service]
+Type=simple
+User=rock
+Group=rock
+ExecStart=/usr/bin/python3 /home/rock/OrangeBox/system/clean_memory.py
