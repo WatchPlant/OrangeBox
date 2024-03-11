@@ -50,7 +50,7 @@ sources_locked:
       - pip3 install -e .
   - repo: git@github.com:WatchPlant/BLE_Sink.git
     name: BLE_Sink
-    rev: 3c4ef088d92b9c8c10a4c3b7327d8675975facfd
+    rev: 4d904e88768935d3334f67dcdd7e4f63ed5f69d4
     type: git
     params:
     sparse_paths:
