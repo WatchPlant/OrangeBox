@@ -1,0 +1,8 @@
+[Unit]
+Description=Check connectivity
+
+[Service]
+Type=simple
+User=rock
+Group=rock
+ExecStart=/bin/bash /home/rock/OrangeBox/scripts/check_connectivity.sh

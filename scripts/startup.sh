@@ -153,9 +153,9 @@ main () {
 
     check_internet
     if [ $? -eq 0 ]; then
-        LED_SETTING=5
+        LED_SETTING=6
     else
-        LED_SETTING=4
+        LED_SETTING=5
     fi
     set_leds "$LED_SETTING"
 }

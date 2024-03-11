@@ -11,13 +11,14 @@ const int GPIO_PIN = 11;
 ledTable  T[] =
 //Pin  St Loop  State 0          State 1            State 2          State 3         Wkup
 { 
-  { GPIO_PIN, 0, 0, {{MB_HIGH, 500, 0}, {MB_HIGH, 500, 0}, {MB_HIGH, 500, 0}, {MB_HIGH, 500, 0}}, 0},	// POWER ON
-  { GPIO_PIN, 0, 0, {{MB_HIGH, 500, 0}, {MB_LOW, 500, 0}, {MB_HIGH, 500, 0}, {MB_LOW, 500, 0}}, 0},		// KERNEL LOADED
-  { GPIO_PIN, 0, 0, {{MB_LOW, 200, 0}, {MB_HIGH, 100, 0}, {MB_LOOP, 0, 0}, {MB_HIGH, 1700, 0}}, 0 },	// LOADING-OFFLINE
-  { GPIO_PIN, 0, 0, {{MB_LOW, 200, 0}, {MB_HIGH, 100, 0}, {MB_LOOP, 1, 0}, {MB_HIGH, 1400, 0}}, 0 },	// LOADING-ONLINE
-  { GPIO_PIN, 0, 0, {{MB_HIGH, 100, 0}, {MB_LOW, 200, 0}, {MB_LOOP, 0, 0}, {MB_LOW, 1700, 0}}, 0 },		// READY-OFFLINE OPERATION
-  { GPIO_PIN, 0, 0, {{MB_HIGH, 100, 0}, {MB_LOW, 200, 0}, {MB_LOOP, 1, 0}, {MB_LOW, 1400, 0}}, 0 },		// READY-ONLINE OPERATION
-  { GPIO_PIN, 0, 0, {{MB_HIGH, 200, 0}, {MB_LOW, 200, 0}, {MB_HIGH, 200, 0}, {MB_LOW, 200, 0}}, 0},		// ERROR
+  { GPIO_PIN, 0, 0, {{MB_HIGH, 500, 0}, {MB_HIGH, 500, 0}, {MB_HIGH, 500, 0}, {MB_HIGH, 500, 0}}, 0},	// 0 - POWER ON
+  { GPIO_PIN, 0, 0, {{MB_HIGH, 500, 0}, {MB_LOW, 500, 0}, {MB_HIGH, 500, 0}, {MB_LOW, 500, 0}}, 0},		// 1 - KERNEL LOADED
+  { GPIO_PIN, 0, 0, {{MB_LOW, 200, 0}, {MB_HIGH, 100, 0}, {MB_LOOP, 0, 0}, {MB_HIGH, 1700, 0}}, 0 },	// 2 - LOADING-OFFLINE
+  { GPIO_PIN, 0, 0, {{MB_LOW, 200, 0}, {MB_HIGH, 100, 0}, {MB_LOOP, 1, 0}, {MB_HIGH, 1400, 0}}, 0 },	// 3 - LOADING-ONLINE
+  { GPIO_PIN, 0, 0, {{MB_HIGH, 100, 0}, {MB_LOW, 200, 0}, {MB_LOOP, 0, 0}, {MB_LOW, 1700, 0}}, 0 },		// 4 - READY-NO WIFI
+  { GPIO_PIN, 0, 0, {{MB_HIGH, 100, 0}, {MB_LOW, 200, 0}, {MB_LOOP, 1, 0}, {MB_LOW, 1400, 0}}, 0 },		// 5 - READY-OFFLINE OPERATION
+  { GPIO_PIN, 0, 0, {{MB_HIGH, 100, 0}, {MB_LOW, 200, 0}, {MB_LOOP, 2, 0}, {MB_LOW, 1100, 0}}, 0 },		// 6 - READY-ONLINE OPERATION
+  { GPIO_PIN, 0, 0, {{MB_HIGH, 200, 0}, {MB_LOW, 200, 0}, {MB_HIGH, 200, 0}, {MB_LOW, 200, 0}}, 0},		// 7 - ERROR
 };
 const int NUM_STEPS = 4;  // Number steps of LED blinking loop
 const int NUM_STATES = sizeof(T) / sizeof(T[0]);  // Number of states (different blinking modes)
