@@ -298,7 +298,7 @@ liveDataSettingsPane = dbc.Row(
             width=2,
         ),
         dbc.Col(
-            [html.Label("How many hours to display?")],
+            [html.Label("How many hours to display? (0.1 - 12)")],
             width='auto',
         ),
         dbc.Col(
@@ -306,8 +306,9 @@ liveDataSettingsPane = dbc.Row(
                 dbc.Input(
                     type="number",
                     value=DEFAULT_PLOT_WINDOW,
-                    min=1,
+                    min=0.1,
                     max=12,
+                    # step=0.5,
                     id="time-select",
                 ),
             ],
@@ -325,7 +326,8 @@ liveDataSettingsPane = dbc.Row(
             ],
             width={"size": "auto", "order": "last", "offset": 2},
         )
-    ]
+    ],
+    align="center",
 )
 
 # Set up the Dash app
@@ -417,6 +419,20 @@ app.layout = dbc.Container(
         ),
         # Storage elements
         dcc.Store(id="data-path-store", data=[]),
+        # Notification modal
+        dbc.Modal(
+            [
+                dbc.ModalHeader(dbc.ModalTitle("Success!")),
+                dbc.ModalBody("Action completed successfully!"),
+                dbc.ModalFooter(
+                    dbc.Button(
+                        "OK", id="notify-modal-OK", className="ms-auto", n_clicks=0
+                    )
+                ),
+            ],
+            id="notify-modal",
+            is_open=False,
+        ),
     ],
     fluid=True,
 )
@@ -444,9 +460,11 @@ def refresh_infoPane(value):
 
 @app.callback(
     Output("wifi-success", "children"),
+    Output("notify-modal", "is_open", allow_duplicate=True),
     Input("update-button", "n_clicks"),
     State("wifi-name", "value"),
     State("wifi-password", "value"),
+    prevent_initial_call='initial_duplicate'
 )
 def write_settingsPane(n_clicks, wifi_name, wifi_password):
     if n_clicks is None:
@@ -456,9 +474,9 @@ def write_settingsPane(n_clicks, wifi_name, wifi_password):
         utils.write_config_file(WIFI_FILE, wifi_name, wifi_password)
         subprocess.run("rm /home/rock/OrangeBox/status/wifi_connect_success.txt", shell=True)
         subprocess.run("sudo rm /etc/NetworkManager/system-connections/*", shell=True)
-        return "success"
+        return "success", True
     except Exception as e:
-        return f"Error: {e}"
+        return f"Error: {e}", False
 
 
 @app.callback(
@@ -514,12 +532,13 @@ def download_data(n_clicks):
 
 @app.callback(
     Output("dummy-div-other", "children", allow_duplicate=True),
+    Output("notify-modal", "is_open", allow_duplicate=True),
     Input("orange_box-freq", "value"),
     prevent_initial_call=True,
 )
 def update_measure_freq(value):
     subprocess.run(f"sed -i 's/MEAS_INT=.*/MEAS_INT={value}/' ~/.bashrc", shell=True)
-    return None
+    return None, True
 
 
 @app.callback(
@@ -621,6 +640,18 @@ def save_configuration(n_clicks, current_values):
     return False
 
 
+@app.callback(
+    Output("notify-modal", "is_open", allow_duplicate=True),
+    Input("notify-modal-OK", "n_clicks"),
+    State("notify-modal", "is_open"),
+    prevent_initial_call='initial_duplicate'
+)
+def toggle_notify_modal(n_clicks, is_open):
+    if n_clicks:
+        return False
+    return is_open
+
+
 # Periodic callbacks
 ####################
 @app.callback(
@@ -641,6 +672,7 @@ def update_storages(n, data_path):
 @app.callback(
     Output("mu_plot", "figure"),
     Output("energy_plot", "figure"),
+    Output("time-select", "invalid"),
     Input("interval-component", "n_intervals"),
     Input("sensor-select", "value"),
     Input("time-select", "value"),
@@ -649,6 +681,10 @@ def update_storages(n, data_path):
 def update_plots(n, sensor_select, time_select, data_path):
     fig_data = {}
     fig_power = {}
+    time_select_invalid = True
+    
+    if time_select is None:
+        return fig_data, fig_power, time_select_invalid
 
     if sensor_select.startswith("CYB"):
         sensor_type = "MU"
@@ -686,7 +722,7 @@ def update_plots(n, sensor_select, time_select, data_path):
             file_names.sort()
             df = pd.read_csv(data_dir / file_names[-1])
             df["datetime"] = pd.to_datetime(df["datetime"], format="%Y-%m-%d %H:%M:%S:%f")  # convert to datetime object
-            df_window = df.loc[df["datetime"] > pd.Timestamp.now() - pd.Timedelta(hours=time_select)]
+            df_window = df.loc[df["datetime"] > pd.Timestamp.now() - pd.Timedelta(seconds=int(time_select*3600))]
 
             if data_fields == "all":
                 data_fields = df.columns.to_list()
@@ -779,7 +815,7 @@ def update_plots(n, sensor_select, time_select, data_path):
         fig_power["layout"]["uirevision"] = "constant"
 
     # Return the updated figures
-    return fig_data, fig_power
+    return fig_data, fig_power, not time_select_invalid
 
 
 # Run the app
