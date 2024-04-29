@@ -1,8 +1,9 @@
-from operator import ge
+import csv
 import os
 import pathlib
 import shutil
 import socket
+import subprocess
 import sys
 from time import sleep
 
@@ -58,6 +59,7 @@ welcome_message = """
     /power_plot - Generate a plot based on the data.
     /subscribe - Recieve update messages from the bot.
     /unsubscribe - Unsubscribe from update messages.
+    /status - Get the current status of the Orange Box.
 """
 
 # Handlers receiving messages.
@@ -108,7 +110,45 @@ def handle_remove_id(message):
     else:
         bot.reply_to(message, "Not subscribed")
         print(f"Not subscribed: {message.chat.id}")
+        
+@bot.message_handler(commands=["status"])
+def handle_status(message):
+    battery_voltage = "N/A"
+    disk_usage = "N/A"
+    ip_address = get_ip_address()
+    
+    # Current battery level
+    try:
+        csv_files = sorted(pathlib.Path('/home/rock/measurements/Power').glob('*.csv'))
+        with open(csv_files[-1], 'r') as f:
+            reader = csv.reader(f)
+            last_line = None
+            for row in reader:
+                last_line = row
 
+        battery_voltage = last_line[3] if last_line else 'N/A'
+    except Exception as e:
+        print(f"Error: {e}")
+        
+    # Battery status
+    if float(battery_voltage) >= 4.0:
+        battery_status = "good"
+    elif float(battery_voltage) >= 3.7:
+        battery_status = "ok"
+    elif 3.5 < float(battery_voltage) < 3.7:
+        battery_status = "low"
+    elif float(battery_voltage) < 3.5:
+        battery_status = "critical"
+    else:
+        battery_status = "N/A"
+        
+    # Disk usage
+    command = "df -h / | awk '{print $5}' | grep -oP '\\d+%'"
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    disk_usage = result.stdout.strip()
+    
+    response = f"I am alive!\n\nIP address: {ip_address}\nBattery voltage: {battery_voltage} V ({battery_status})\nDisk usage: {disk_usage}"
+    bot.reply_to(message, response)
 
 @bot.message_handler(commands=["meas_files"])
 def handle_file(message):
