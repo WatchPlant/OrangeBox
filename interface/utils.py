@@ -1,5 +1,7 @@
+import os
 import shutil
 import socket
+import subprocess
 from pathlib import Path
 
 import pandas as pd
@@ -68,6 +70,17 @@ def read_data_fields_from_file(file_path):
 def save_date_fields_to_file(config, file_path):
     with open(file_path, 'w') as file:
         yaml.dump(config, file)
+        
+def get_git_versions(paths):
+    out = []
+    for path in reversed(paths):
+        os.chdir(path)
+        result = subprocess.run(['git', 'rev-parse', 'HEAD'], stdout=subprocess.PIPE)
+        commit_hash = result.stdout.decode('utf-8').strip()
+        out.append(f"-- {path.stem}: {commit_hash[-6:]}")
+
+    return list(reversed(out))
+
 
 def merge_measurements(measurements_path, output_path, zip_file_path):
     def load_and_validate_csv(file_path):

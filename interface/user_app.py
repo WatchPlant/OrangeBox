@@ -28,6 +28,12 @@ EXP_NUMBER_FILE = pathlib.Path.home() / "OrangeBox/status/experiment_number.txt"
 MEASUREMENT_PATH = pathlib.Path.home() / "measurements"
 TEMP_ZIP_PATH = pathlib.Path.home() / "merged_measurements"
 ZIP_FILE_PATH = pathlib.Path.home() / "data"
+GIT_REPOS_PATHS = [
+    pathlib.Path.home() / "OrangeBox",
+    pathlib.Path.home() / "OrangeBox/drivers/mu_interface",
+    pathlib.Path.home() / "OrangeBox/drivers/BLE_Sink",
+    pathlib.Path.home() / "OrangeBox/drivers/Zigbee_Sink"
+]
 FIGURE_SAVE_PATH = pathlib.Path.home() / "OrangeBox/status"
 ENERGY_PATH = MEASUREMENT_PATH / "Power"
 DEFAULT_PLOT_WINDOW = 2
@@ -64,6 +70,12 @@ infoPane = dbc.Col(
             [
                 dbc.Col([html.Label("Hostname:")], width="auto"),
                 dbc.Col([html.Label("N/A", id="orange_box-hostname")]),
+            ],
+        ),
+        html.Br(),
+        dbc.Row(
+            [
+                dbc.Col([html.Label("Version:  N/A")], id="orange_box-version", width="auto"),
             ],
         ),
     ]
@@ -455,6 +467,7 @@ app.layout = dbc.Container(
     Output("orange_box-hostname", "children"),
     Output("wifi-name", "value"),
     Output("wifi-password", "value"),
+    Output("orange_box-version", "children"),
     Input("refresh-button", "n_clicks"),
 )
 def refresh_infoPane(value):
@@ -464,8 +477,11 @@ def refresh_infoPane(value):
     wifi_config = utils.parse_config_file(WIFI_FILE)
     wifi_name = wifi_config.get("SSID", "N/A")
     wifi_password = wifi_config.get("PASS", "N/A")
+    
+    hashes = utils.get_git_versions(GIT_REPOS_PATHS)
+    versions = ["Version:"] + [item for pair in zip([html.Br()]*len(hashes), hashes) for item in pair]
 
-    return ip_address, hostname, wifi_name, wifi_password
+    return ip_address, hostname, wifi_name, wifi_password, versions
 
 
 @app.callback(
