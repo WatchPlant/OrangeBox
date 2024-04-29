@@ -5,11 +5,13 @@ import time
 
 import dash
 import dash_bootstrap_components as dbc
+import diskcache
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from dash import dcc, html, ctx
 from dash.dependencies import Input, Output, State
+from dash.long_callback import DiskcacheLongCallbackManager
 from plotly.subplots import make_subplots
 
 import utils
@@ -324,14 +326,22 @@ liveDataSettingsPane = dbc.Row(
                     ),
                 dcc.Download(id="download-data")
             ],
-            width={"size": "auto", "order": "last", "offset": 2},
+            width={"size": "auto", "offset": 2},
+        ),
+        # Green label to show that the download is working
+        dbc.Col(
+            [html.Label(id="download-working", children="Working...", style={"color": "green"}, hidden=True)],
+            width="auto",
         )
     ],
     align="center",
 )
 
 # Set up the Dash app
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
+cache = diskcache.Cache("./cache")
+long_callback_manager = DiskcacheLongCallbackManager(cache)
+
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.FLATLY], long_callback_manager=long_callback_manager)
 server = app.server
 
 # Define the layout
@@ -517,9 +527,13 @@ def start_stop_experiment(start, stop):
         return True, False, False, True
 
 
-@app.callback(
+@app.long_callback(
     Output("download-data", "data"),
     Input("download-btn", "n_clicks"),
+    running=[
+        (Output("download-btn", "disabled"), True, False),
+        (Output("download-working", "hidden"), False, True),
+    ],
     prevent_initial_call=True
 )
 def download_data(n_clicks):
