@@ -39,7 +39,7 @@ groups:
 sources_locked:
   - repo: git@github.com:WatchPlant/mu_interface.git
     name: mu_interface
-    rev: 0ac2aad2130f26c011d068bcdbdecb48b2464ffd
+    rev: 6f5ac5f55394c89b6865ccc2239616d5ccdcc210
     type: git
     params:
     sparse_paths:
@@ -61,7 +61,7 @@ sources_locked:
       -
   - repo: git@github.com:WatchPlant/Zigbee_Sink.git
     name: Zigbee_Sink
-    rev: cf2118be8e7e1b607e5c4a38a0fe7d7c22854cd0
+    rev: 5d3afd515159fde5e1c9d0b3fed866f946df9de2
     type: git
     params:
     sparse_paths:
