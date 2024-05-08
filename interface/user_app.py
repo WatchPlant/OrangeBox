@@ -27,6 +27,7 @@ CUSTOM_DATA_FIELDS_FILE = (
 )
 WIFI_FILE = pathlib.Path.home() / "OrangeBox/config/orange_box.config"
 EXP_NUMBER_FILE = pathlib.Path.home() / "OrangeBox/status/experiment_number.txt"
+ACTIVE_DEVICES_PATH = pathlib.Path.home() / "OrangeBox/status/measuring/"
 MEASUREMENT_PATH = pathlib.Path.home() / "measurements"
 TEMP_ZIP_PATH = pathlib.Path.home() / "merged_measurements"
 ZIP_FILE_PATH = pathlib.Path.home() / "data"
@@ -730,10 +731,12 @@ def update_storages(n, data_path):
     experiment_path = pathlib.Path(data_path)
     try:
         nodes = [node.name for node_type in experiment_path.iterdir() for node in node_type.iterdir()]
+        active_nodes = [node.name.split("_")[0] for node in ACTIVE_DEVICES_PATH.iterdir()]
+        filtered_nodes = [node for node in nodes if node in active_nodes]
     except FileNotFoundError:
         return []
 
-    return [{"label": entry, "value": entry} for entry in sorted(nodes)]
+    return [{"label": entry, "value": entry} for entry in sorted(filtered_nodes)]
 
 
 @app.callback(
