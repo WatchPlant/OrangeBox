@@ -1,7 +1,9 @@
+import logging
 import os
 import pathlib
 import subprocess
 import time
+import threading
 
 import dash
 import dash_bootstrap_components as dbc
@@ -37,7 +39,8 @@ GIT_REPOS_PATHS = [
 FIGURE_SAVE_PATH = pathlib.Path.home() / "OrangeBox/status"
 ENERGY_PATH = MEASUREMENT_PATH / "Power"
 DEFAULT_PLOT_WINDOW = 2
-
+CALL_TRACKER = utils.TimestampMonitor(num_intervals=3, interval_len=10)
+CALL_TRACKER_LOCK = threading.Lock()
 
 infoPane = dbc.Col(
     [
@@ -435,7 +438,12 @@ app.layout = dbc.Container(
         ),
         # Auto refresh
         dcc.Interval(
-            id="interval-component",
+            id="plot-interval",
+            interval=10 * 1000,
+            n_intervals=0,
+        ),
+        dcc.Interval(
+            id="connections-interval",
             interval=10 * 1000,
             n_intervals=0,
         ),
@@ -453,6 +461,20 @@ app.layout = dbc.Container(
                 ),
             ],
             id="notify-modal",
+            is_open=False,
+        ),
+        dbc.Modal(
+            [
+                dbc.ModalHeader(dbc.ModalTitle("Warning!")),
+                dbc.ModalBody("Multiple instances of user interface are open! Please close the other windows or tabs."),
+                dbc.ModalFooter(
+                    dbc.Button(
+                        "OK", id="warn-modal-OK", className="ms-auto", n_clicks=0
+                    )
+                ),
+            ],
+            id="warn-modal",
+            backdrop="static",
             is_open=False,
         ),
     ],
@@ -502,6 +524,7 @@ def write_settingsPane(n_clicks, wifi_name, wifi_password):
         subprocess.run("sudo rm /etc/NetworkManager/system-connections/*", shell=True)
         return "success", True
     except Exception as e:
+        logging.error(f"Error while writing WiFi settings: {e}")
         return f"Error: {e}", False
 
 
@@ -646,7 +669,7 @@ def update_checklist_options(n_clicks):
     State("data-fields-modal", "is_open"),
     prevent_initial_call=True,
 )
-def toggle_modal(n1, n2, is_open):
+def toggle_datafields_modal(n1, n2, is_open):
     if n1 or n2:
         return not is_open
     return is_open
@@ -682,11 +705,25 @@ def toggle_notify_modal(n_clicks, is_open):
     return is_open
 
 
+@app.callback(
+    Output("warn-modal", "is_open", allow_duplicate=True),
+    Input("warn-modal-OK", "n_clicks"),
+    State("warn-modal", "is_open"),
+    prevent_initial_call='initial_duplicate'
+)
+def toggle_warn_modal(n_clicks, is_open):
+    if n_clicks:
+        with CALL_TRACKER_LOCK:
+            CALL_TRACKER.reset()
+        return False
+    return is_open
+
+
 # Periodic callbacks
 ####################
 @app.callback(
     Output("sensor-select", "options"),
-    Input("interval-component", "n_intervals"),
+    Input("plot-interval", "n_intervals"),
     Input("data-path-store", "data")
 )
 def update_storages(n, data_path):
@@ -700,10 +737,25 @@ def update_storages(n, data_path):
 
 
 @app.callback(
+    Output("warn-modal", "is_open", allow_duplicate=True),
+    Input("connections-interval", "n_intervals"),
+    State("warn-modal", "is_open"),
+    prevent_initial_call=True
+)
+def update_connections(n, is_open):
+    with CALL_TRACKER_LOCK:
+        ok, num_calls = CALL_TRACKER.update_and_check()
+        if not ok:
+            logging.warning("Maybe multiple windows are open")
+            return True
+    return is_open
+
+
+@app.callback(
     Output("mu_plot", "figure"),
     Output("energy_plot", "figure"),
     Output("time-select", "invalid"),
-    Input("interval-component", "n_intervals"),
+    Input("plot-interval", "n_intervals"),
     Input("sensor-select", "value"),
     Input("time-select", "value"),
     Input("data-path-store", "data"),
@@ -765,8 +817,8 @@ def update_plots(n, sensor_select, time_select, data_path):
                 title="Measurement Data",
                 template="plotly",
             )
-        except FileNotFoundError:
-            pass
+        except (FileNotFoundError, IndexError):
+            logging.error("File for live plotting not found.")
 
     # Load the updated data from the CSV file (energy measurements)
     try:
@@ -834,8 +886,8 @@ def update_plots(n, sensor_select, time_select, data_path):
         # Set y-axes titles
         fig_power.update_yaxes(title_text="voltage [V]", color="red", secondary_y=False)
         fig_power.update_yaxes(title_text="current [mA]", color="blue", secondary_y=True)
-    except FileNotFoundError:
-        pass
+    except (FileNotFoundError, IndexError):
+        logging.error("File for power consumption plotting not found.")
 
     if fig_data:
         # Prevent the plot from changing user interaction settings (zoom, pan, etc.)
@@ -850,5 +902,7 @@ def update_plots(n, sensor_select, time_select, data_path):
 
 # Run the app
 if __name__ == "__main__":
+    utils.setup_logger('user_app', level=logging.INFO)
+    
     app.run_server(host="0.0.0.0", debug=False)
     # app.run_server(host='0.0.0.0', port=8050)

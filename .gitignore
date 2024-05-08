@@ -11,3 +11,4 @@ system/telegram_bot/telegram_bot/subscribers.txt
 system/telegram_bot/telegram_bot/tokens.yaml
 config/orange_box.config
 interface/cache/
+interface/logs/
