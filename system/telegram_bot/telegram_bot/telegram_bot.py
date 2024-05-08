@@ -75,9 +75,11 @@ def handle_start(message):
     help_message = "Feel free to explore the bot's functionalities! If you have any questions, use the /help command."
     bot.send_message(message.chat.id, f"{welcome_message}\n\n{help_message}")
 
+
 @bot.message_handler(commands=["help"])
 def handle_help(message):
     bot.send_message(message.chat.id, welcome_message)
+
 
 @bot.message_handler(commands=["subscribe"])
 def handle_add_id(message):
@@ -97,6 +99,7 @@ def handle_add_id(message):
             bot.reply_to(message, "Already subscribed")
             print(f"Already subscribed: {id}")
 
+
 @bot.message_handler(commands=["unsubscribe"])
 def handle_remove_id(message):
     try:
@@ -114,28 +117,37 @@ def handle_remove_id(message):
     else:
         bot.reply_to(message, "Not subscribed")
         print(f"Not subscribed: {message.chat.id}")
-        
+
+
 @bot.message_handler(commands=["status"])
 def handle_status(message):
     battery_voltage = "N/A"
+    battery_current = "N/A"
     disk_usage = "N/A"
+
+    # Network status
     ip_address = get_ip_address()
-    
+    result = subprocess.run("nmcli -t -f name connection show --active", shell=True, capture_output=True, text=True)
+    ssid = result.stdout.strip()
+
     # Current battery level
     try:
-        csv_files = sorted(pathlib.Path('/home/rock/measurements/Power').glob('*.csv'))
-        with open(csv_files[-1], 'r') as f:
+        csv_files = sorted(pathlib.Path("/home/rock/measurements/Power").glob("*.csv"))
+        with open(csv_files[-1], "r") as f:
             reader = csv.reader(f)
             last_line = None
             for row in reader:
                 last_line = row
 
-        battery_voltage = last_line[3] if last_line else 'N/A'
+        battery_voltage = last_line[3] if last_line else "N/A"
+        battery_current = last_line[4] if last_line else "N/A"
     except Exception as e:
         print(f"Error: {e}")
-        
+
     # Battery status
-    if float(battery_voltage) >= 4.0:
+    if float(battery_current) > 0:
+        battery_status = "charging"
+    elif float(battery_voltage) >= 4.0:
         battery_status = "good"
     elif float(battery_voltage) >= 3.7:
         battery_status = "ok"
@@ -145,14 +157,21 @@ def handle_status(message):
         battery_status = "critical"
     else:
         battery_status = "N/A"
-        
+
     # Disk usage
     command = "df -h / | awk '{print $5}' | grep -oP '\\d+%'"
     result = subprocess.run(command, shell=True, capture_output=True, text=True)
     disk_usage = result.stdout.strip()
-    
-    response = f"I am alive!\n\nIP address: {ip_address}\nBattery voltage: {battery_voltage} V ({battery_status})\nDisk usage: {disk_usage}"
+
+    response = (
+        f"I am alive!\n\n"
+        f"IP address: {ip_address}\n"
+        f"WIFI: {ssid}\n"
+        f"Battery voltage: {battery_voltage} V ({battery_status})\n"
+        f"Disk usage: {disk_usage}"
+    )
     bot.reply_to(message, response)
+
 
 @bot.message_handler(commands=["meas_files"])
 def handle_file(message):
@@ -183,10 +202,12 @@ zmq_socket = zmq_context.socket(zmq.SUB)
 zmq_socket.connect("tcp://localhost:5556")
 zmq_socket.subscribe("")
 
+
 def zmq_listener():
     while True:
         message = zmq_socket.recv_string()
         broadcast_message(message)
+
 
 listener_thread = threading.Thread(target=zmq_listener)
 listener_thread.daemon = True
@@ -195,13 +216,15 @@ listener_thread.daemon = True
 if __name__ == "__main__":
     first_pass = True
     listener_thread.start()
-    
+
     while True:
         sleep(1)
         try:
             print("(re)Starting bot...")
             if first_pass:
-                broadcast_message(f"Hello! I'm up and running :)\nMy IP address is: {get_ip_address()}")
+                broadcast_message(
+                    f"Hello! I'm up and running :)\nMy IP address is: {get_ip_address()}"
+                )
                 first_pass = False
             bot.infinity_polling(skip_pending=True)
         except KeyboardInterrupt:
