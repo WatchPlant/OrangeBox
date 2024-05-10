@@ -205,9 +205,18 @@ configPane = dbc.Col(
 powerPane = dbc.Col(
     [
         html.Hr(),
-        html.H3("Live power consumption"),
+        html.H3("Live Orange Box Status"),
         dcc.Graph(
             id="energy_plot",
+            config={
+                "displaylogo": False,
+                "edits": {"legendPosition": True},
+                "modeBarButtonsToRemove": ["autoScale2d"],
+                "scrollZoom": True,
+            },
+        ),
+        dcc.Graph(
+            id="env_plot",
             config={
                 "displaylogo": False,
                 "edits": {"legendPosition": True},
@@ -754,9 +763,24 @@ def update_connections(n, is_open):
     return is_open
 
 
+def read_dataframe(data_dir, time_window, fmt=None):
+    try:
+        file_names = os.listdir(data_dir)
+        file_names.sort()
+        df = pd.read_csv(data_dir / file_names[-1])
+        df["datetime"] = pd.to_datetime(df["datetime"], format=fmt)
+        if time_window is not None:
+            df = df.loc[df["datetime"] > pd.Timestamp.now() - pd.Timedelta(**time_window)]
+        return df
+    except (FileNotFoundError, IndexError):
+        logging.error("File for live plotting not found.")
+        return None
+
+
 @app.callback(
     Output("mu_plot", "figure"),
     Output("energy_plot", "figure"),
+    Output("env_plot", "figure"),
     Output("time-select", "invalid"),
     Input("plot-interval", "n_intervals"),
     Input("sensor-select", "value"),
@@ -766,10 +790,11 @@ def update_connections(n, is_open):
 def update_plots(n, sensor_select, time_select, data_path):
     fig_data = {}
     fig_power = {}
+    fig_env = {}
     time_select_invalid = True
     
     if time_select is None:
-        return fig_data, fig_power, time_select_invalid
+        return fig_data, fig_power, fig_env, time_select_invalid
 
     if sensor_select.startswith("CYB"):
         sensor_type = "MU"
@@ -800,44 +825,34 @@ def update_plots(n, sensor_select, time_select, data_path):
         sensor_type = ""
         data_fields = []
 
+    # MEASUREMENT DATA PLOT
     if sensor_type:
         data_dir = pathlib.Path(data_path) / sensor_type / sensor_select
-        try:
-            file_names = os.listdir(data_dir)
-            file_names.sort()
-            df = pd.read_csv(data_dir / file_names[-1])
-            df["datetime"] = pd.to_datetime(df["datetime"], format="%Y-%m-%d %H:%M:%S:%f")  # convert to datetime object
-            df_window = df.loc[df["datetime"] > pd.Timestamp.now() - pd.Timedelta(seconds=int(time_select*3600))]
-
+        df = read_dataframe(data_dir, {"seconds": int(time_select*3600)}, fmt="%Y-%m-%d %H:%M:%S:%f")
+        if df is not None:
             if data_fields == "all":
                 data_fields = df.columns.to_list()
                 data_fields.remove("datetime")
 
             fig_data = px.line(
-                df_window,
+                df,
                 x="datetime",
                 y=data_fields,
                 title="Measurement Data",
                 template="plotly",
             )
-        except (FileNotFoundError, IndexError):
-            logging.error("File for live plotting not found.")
+            # Prevent the plot from changing user interaction settings (zoom, pan, etc.)
+            # Not well documented. Probably any value will work as long as it's constant.
+            fig_data["layout"]["uirevision"] = "constant"
 
-    # Load the updated data from the CSV file (energy measurements)
-    try:
-        file_names = os.listdir(ENERGY_PATH)
-        file_names.sort()
-        df = pd.read_csv(ENERGY_PATH / file_names[-1])
-        df["datetime"] = pd.to_datetime(df["datetime"])  # convert to datetime object
-        df_window = df.loc[df["datetime"] > pd.Timestamp.now() - pd.Timedelta(hours=time_select)]
-
-        # Create the second plot (energy data)
+    # ENERGY DATA PLOT
+    df = read_dataframe(ENERGY_PATH, {"seconds": int(time_select*3600)})
+    if df is not None:
         fig_power = make_subplots(specs=[[{"secondary_y": True}]])
-        # Add traces
         fig_power.add_trace(
             go.Scatter(
-                x=df_window["datetime"],
-                y=df_window["bus_voltage_solar"],
+                x=df["datetime"],
+                y=df["bus_voltage_solar"],
                 name="bus_voltage_solar",
                 mode="lines",
                 line_color="red",
@@ -845,11 +860,10 @@ def update_plots(n, sensor_select, time_select, data_path):
             ),
             secondary_y=False,
         )
-
         fig_power.add_trace(
             go.Scatter(
-                x=df_window["datetime"],
-                y=df_window["current_solar"],
+                x=df["datetime"],
+                y=df["current_solar"],
                 name="current_solar",
                 mode="lines",
                 line_color="blue",
@@ -857,50 +871,63 @@ def update_plots(n, sensor_select, time_select, data_path):
             ),
             secondary_y=True,
         )
-
         fig_power.add_trace(
             go.Scatter(
-                x=df_window["datetime"],
-                y=df_window["bus_voltage_battery"],
+                x=df["datetime"],
+                y=df["bus_voltage_battery"],
                 name="bus_voltage_battery",
                 mode="lines",
                 line_color="red",
             ),
             secondary_y=False,
         )
-
         fig_power.add_trace(
             go.Scatter(
-                x=df_window["datetime"],
-                y=df_window["current_battery"],
+                x=df["datetime"],
+                y=df["current_battery"],
                 name="current_battery",
                 mode="lines",
                 line_color="blue",
             ),
             secondary_y=True,
         )
-
-        # Add figure title
         fig_power.update_layout(title_text="Energy Consumption")
-
-        # Set x-axis title
         fig_power.update_xaxes(title_text="datetime")
-
-        # Set y-axes titles
         fig_power.update_yaxes(title_text="voltage [V]", color="red", secondary_y=False)
         fig_power.update_yaxes(title_text="current [mA]", color="blue", secondary_y=True)
-    except (FileNotFoundError, IndexError):
-        logging.error("File for power consumption plotting not found.")
-
-    if fig_data:
-        # Prevent the plot from changing user interaction settings (zoom, pan, etc.)
-        # Not well documented. Probably any value will work as long as it's constant.
-        fig_data["layout"]["uirevision"] = "constant"
-    if fig_power:
         fig_power["layout"]["uirevision"] = "constant"
+        
+    # TEMP & HUMIDITY PLOT
+    if df is not None and "temperature" in df.columns and "humidity" in df.columns:
+        fig_env = make_subplots(specs=[[{"secondary_y": True}]])
+        fig_env.add_trace(
+            go.Scatter(
+                x=df["datetime"],
+                y=df["temperature"],
+                name="temperature",
+                mode="lines",
+                line_color="red",
+            ),
+            secondary_y=False,
+        )
+        fig_env.add_trace(
+            go.Scatter(
+                x=df["datetime"],
+                y=df["humidity"],
+                name="humidity",
+                mode="lines",
+                line_color="blue",
+            ),
+            secondary_y=True,
+        )
+        fig_env.update_layout(title_text="Temp. & Humidity inside the box")
+        fig_env.update_xaxes(title_text="datetime")
+        fig_env.update_yaxes(title_text="temperature [°C]", color="red", secondary_y=False)
+        fig_env.update_yaxes(title_text="humidity [%]", color="blue", secondary_y=True)
+        fig_env["layout"]["uirevision"] = "constant"
 
     # Return the updated figures
-    return fig_data, fig_power, not time_select_invalid
+    return fig_data, fig_power, fig_env, not time_select_invalid
 
 
 # Run the app
