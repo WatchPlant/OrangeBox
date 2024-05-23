@@ -73,6 +73,7 @@ batt_status = "OK"
 BATT_RECOVER = 3.8
 BATT_LOW = 3.7
 BATT_CRIT = 3.5
+shutdown_script = pathlib.Path.home() / "OrangeBox/scripts/shutdown.sh"
 
 ## Set up ZMQ publisher.
 zmq_context = zmq.Context()
@@ -89,10 +90,10 @@ try:
         current_battery = round(ina219_battery.current, 1)            # current in mA
 
         batt_history.append(bus_voltage_battery)
-        
+
         if all(val < BATT_CRIT for val in batt_history):
             zmq_socket.send_string("Battery Voltage Is Critically Low. Shutting Down!")
-            subprocess.run(pathlib.Path.home() / "OrangeBox/scripts/shutdown.sh", shell=True)
+            subprocess.run(str(shutdown_script.resolve()), shell=True)
         if batt_status == "OK" and all(val < BATT_LOW for val in batt_history):
             zmq_socket.send_string("Battery Voltage Is Low.")
             batt_status = "LOW"
