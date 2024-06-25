@@ -71,7 +71,8 @@ last_time = datetime.now()
 batt_history = deque(maxlen=10)
 batt_status = "OK"
 BATT_RECOVER = 3.8
-BATT_LOW = 3.7
+BATT_LOW1 = 3.7
+BATT_LOW2 = 3.6
 BATT_CRIT = 3.5
 shutdown_script = pathlib.Path.home() / "OrangeBox/scripts/shutdown.sh"
 
@@ -94,10 +95,13 @@ try:
         if all(val < BATT_CRIT for val in batt_history):
             zmq_socket.send_string("Battery Voltage Is Critically Low. Shutting Down!")
             subprocess.run(str(shutdown_script.resolve()), shell=True)
-        if batt_status == "OK" and all(val < BATT_LOW for val in batt_history):
-            zmq_socket.send_string("Battery Voltage Is Low.")
-            batt_status = "LOW"
-        elif batt_status == "LOW" and all(val > BATT_RECOVER for val in batt_history):
+        if batt_status == "OK" and all(val < BATT_LOW1 for val in batt_history):
+            zmq_socket.send_string("Battery Voltage Is Low (<= 3.7 V).")
+            batt_status = "LOW1"
+        elif batt_status == "LOW1" and all(val < BATT_LOW2 for val in batt_history):
+            zmq_socket.send_string("Battery Voltage Is Low (<= 3.6 V).")
+            batt_status = "LOW2"
+        elif batt_status in ["LOW1", "LOW2"] and all(val > BATT_RECOVER for val in batt_history):
             batt_status = "OK"
 
         temperature = 0
