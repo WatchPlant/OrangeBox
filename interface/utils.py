@@ -82,7 +82,7 @@ def get_git_versions(paths):
         os.chdir(path)
         result = subprocess.run(['git', 'rev-parse', 'HEAD'], stdout=subprocess.PIPE)
         commit_hash = result.stdout.decode('utf-8').strip()
-        out.append(f"-- {path.stem}: {commit_hash[-6:]}")
+        out.append(f"-- {path.stem}: {commit_hash[:7]}")
 
     return list(reversed(out))
 

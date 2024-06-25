@@ -932,6 +932,7 @@ def update_plots(n, sensor_select, time_select, data_path):
 
 # Run the app
 if __name__ == "__main__":
+    logging.getLogger('werkzeug').setLevel(logging.ERROR)
     utils.setup_logger('user_app', level=logging.INFO)
     
     app.run_server(host="0.0.0.0", debug=False)
