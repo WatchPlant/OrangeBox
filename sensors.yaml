@@ -41,6 +41,7 @@ attach: false
 # post: tmux -CC attach -t plastenik
 
 windows:
+    <%- if args[0] == "all" or args[0] == "MU+BLE" or args[0] == "MU+ZB" %>
     - Blue Boxes:
         layout: 'tiled'
         # Synchronize all panes of this window, can be enabled before or after the pane commands run.
@@ -59,11 +60,14 @@ windows:
             - CYB4: 
                 - cd drivers/mu_interface/mu_interface/Sensor
                 - python3 main.py --port /dev/CYB4 --addr $SINK --dir $MEAS_DIR --int $MEAS_INT --multi
-    <%- if args[0] == "all" %>
+    <%- end %>
+    <%- if args[0] == "all" or args[0] == "BLE" or args[0] == "MU+BLE" %>
     - BLE:
         - cd drivers/BLE_Sink
         - python3 LetsMeasure.py --dir $MEAS_DIR
-    - ZigBee:
+    <%- end %>   
+    <%- if args[0] == "all" or args[0] == "ZB" or args[0] == "MU+ZB" %>
+     - ZigBee:
         - cd drivers/Zigbee_Sink
         - python3 DataSink.py --dir $MEAS_DIR
     <%- end %>
