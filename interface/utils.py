@@ -76,6 +76,25 @@ def save_date_fields_to_file(config, file_path):
     with open(file_path, 'w') as file:
         yaml.dump(config, file)
         
+def read_extra_config(file_path):
+    try:
+        with open(file_path, 'r') as file:
+            config = file.read().strip().split("=")[1].strip('"')
+    except FileNotFoundError:
+        config = "MU"
+        
+    if config == "":
+        config = "MU"
+    
+    if config == "all":
+        return ["MU", "BLE", "ZB"]
+    return config.split("+")
+
+def write_extra_config(values, file_path):
+    with open(file_path, 'w') as file:
+        config = "+".join(values)
+        file.write(f'export RUN_MODE="{config}"')
+        
 def get_git_versions(paths):
     out = []
     for path in reversed(paths):

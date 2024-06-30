@@ -27,6 +27,7 @@ CUSTOM_DATA_FIELDS_FILE = (
 )
 WIFI_FILE = pathlib.Path.home() / "OrangeBox/config/orange_box.config"
 EXP_NUMBER_FILE = pathlib.Path.home() / "OrangeBox/status/experiment_number.txt"
+EXTRA_CONFIG_FILE = pathlib.Path.home() / "extra_config.sh"
 ACTIVE_DEVICES_PATH = pathlib.Path.home() / "OrangeBox/status/measuring/"
 MEASUREMENT_PATH = pathlib.Path.home() / "measurements"
 TEMP_ZIP_PATH = pathlib.Path.home() / "merged_measurements"
@@ -137,11 +138,9 @@ configPane = dbc.Col(
     [
         html.Hr(),
         html.H3("Orange Box Configuration"),
-        dbc.Row(
-            [
-                dbc.Col([html.Label("Change measurement frequency (in ms)")], width="auto"),
-            ]
-        ),
+        dbc.Row([
+            dbc.Col([html.Label("Change measurement frequency (in ms) [Re-start experiment to apply]")], width="auto")
+        ]),
         dbc.Row(
             [
                 dbc.Col(
@@ -161,11 +160,24 @@ configPane = dbc.Col(
                 ),
             ]
         ),
+        dbc.Row([dbc.Col([html.Label("Select available devices [Re-start experiment to apply]")], width="auto")]),
         dbc.Row(
             [
-                dbc.Col([html.Label("System shutdown/reboot")], width="auto"),
+                dbc.Col(
+                    dbc.Checklist(
+                        options=[
+                            {"label": "Blue boxes (MU)", "value": "MU"},
+                            {"label": "Phytonodes", "value": "BLE"},
+                            {"label": "Zigbee nodes", "value": "ZB"},
+                        ],
+                        value=[],
+                        id="sensors-mode-checklist",
+                    )
+                )
             ]
         ),
+        html.Br(),
+        dbc.Row([dbc.Col([html.Label("System shutdown/reboot")], width="auto")]),
         dbc.Row(
             [
                 dbc.Col(
@@ -459,6 +471,7 @@ app.layout = dbc.Container(
         ),
         # Storage elements
         dcc.Store(id="data-path-store", data=[]),
+        dcc.Store(id="run-mode-store", data=[]),
         # Notification modal
         dbc.Modal(
             [
@@ -561,13 +574,14 @@ def new_experiment(n_clicks, hostname):
     Output("stop-experiment", "outline"),
     Input("start-experiment", "n_clicks"),
     Input("stop-experiment", "n_clicks"),
+    State("run-mode-store", "data"),
     prevent_initial_call=True,
 )
-def start_stop_experiment(start, stop):
+def start_stop_experiment(start, stop, run_mode):
     button_id = ctx.triggered_id if not None else ""
-
+    
     if button_id == "start-experiment":
-        subprocess.run(f"tmuxinator start -p ~/OrangeBox/sensors.yaml {os.getenv('RUN_MODE', '')}", shell=True)
+        subprocess.run(f"tmuxinator start -p ~/OrangeBox/sensors.yaml {run_mode}", shell=True)
         return False, True, True, False
     elif button_id == "stop-experiment":
         subprocess.run("tmux send-keys -t sensors C-c", shell=True)
@@ -623,6 +637,20 @@ def reboot_button(n_clicks):
         raise dash.exceptions.PreventUpdate
     return True
 
+
+@app.callback(
+    Output("sensors-mode-checklist", "value"),
+    Output("run-mode-store", "data"),
+    Input("sensors-mode-checklist", "value"),
+)
+def select_sensor_devices(values):
+    if ctx.triggered_id is None:
+        values = utils.read_extra_config(EXTRA_CONFIG_FILE)
+        return values, "+".join(values)
+    
+    utils.write_extra_config(values, EXTRA_CONFIG_FILE)
+    return values, "+".join(values)
+        
 
 # Modal callbacks
 #################
