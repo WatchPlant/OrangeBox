@@ -199,8 +199,9 @@ def send_plot(message):
 ## ZMQ subscriber
 zmq_context = zmq.Context()
 zmq_socket = zmq_context.socket(zmq.SUB)
-zmq_socket.connect("tcp://localhost:5556")
-zmq_socket.subscribe("")
+zmq_socket.bind("tcp://127.0.0.1:5556")
+zmq_socket.subscribe(b"")
+zmq_socket.poll(timeout=0)
 
 
 def zmq_listener():

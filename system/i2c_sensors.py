@@ -79,7 +79,8 @@ shutdown_script = pathlib.Path.home() / "OrangeBox/scripts/shutdown.sh"
 ## Set up ZMQ publisher.
 zmq_context = zmq.Context()
 zmq_socket = zmq_context.socket(zmq.PUB)
-zmq_socket.bind("tcp://*:5556")
+zmq_socket.connect("tcp://127.0.0.1:5556")
+time.sleep(1)
 
 ## Measure and display loop
 try:
@@ -135,7 +136,10 @@ try:
             last_time = current_time
 
         # Store data to csv file locally.
-        csv_object.write2csv(payload)
+        try:
+            csv_object.write2csv(payload)
+        except Exception as e:
+            print(f"Writing to csv file failed with error:\n{e}\n\nContinuing because this is not a fatal error.")
 
         # TODO: add some statistics to print out
 
