@@ -770,19 +770,26 @@ def toggle_warn_modal(n_clicks, is_open):
 ####################
 @app.callback(
     Output("sensor-select", "options"),
+    Output("sensor-select", "value"),
     Input("plot-interval", "n_intervals"),
-    Input("data-path-store", "data")
+    Input("data-path-store", "data"),
+    State("sensor-select", "value")
 )
-def update_storages(n, data_path):
+def update_storages(n, data_path, old_value):
     experiment_path = pathlib.Path(data_path)
     try:
         nodes = [node.name for node_type in experiment_path.iterdir() for node in node_type.iterdir()]
         active_nodes = [node.name.split("_")[0] for node in ACTIVE_DEVICES_PATH.iterdir()]
         filtered_nodes = [node for node in nodes if node in active_nodes]
     except FileNotFoundError:
-        return []
+        return [], ""
 
-    return [{"label": entry, "value": entry} for entry in sorted(filtered_nodes)]
+    options = [{"label": entry, "value": entry} for entry in sorted(filtered_nodes)]
+    if options:
+        return options, old_value if old_value in filtered_nodes else ""
+    else:
+        return options, ""
+    
 
 
 @app.callback(
@@ -868,7 +875,9 @@ def update_plots(n, sensor_select, time_select, data_path):
         data_dir = pathlib.Path(data_path) / sensor_type / sensor_select
         df = read_dataframe(data_dir, {"seconds": int(time_select*3600)}, fmt="%Y-%m-%d %H:%M:%S:%f")
         if df is not None:
-            df = df.resample(resample, on="datetime").mean().dropna()
+            df.set_index("datetime", inplace=True)
+            if len(df) > DEFAULT_PLOT_SAMPLES:
+                df = df.resample(resample).mean().dropna()
             if data_fields == "all":
                 data_fields = df.columns.to_list()
                 data_fields.remove("datetime")
@@ -897,7 +906,9 @@ def update_plots(n, sensor_select, time_select, data_path):
     # ENERGY DATA PLOT
     df = read_dataframe(ENERGY_PATH, {"seconds": int(time_select*3600)})
     if df is not None:
-        df = df.resample(resample, on="datetime").mean().dropna()
+        df.set_index("datetime", inplace=True)
+        if len(df) > DEFAULT_PLOT_SAMPLES:
+            df = df.resample(resample).mean().dropna()
         fig_power = dict(
             data=[
                 go.Scatter(
