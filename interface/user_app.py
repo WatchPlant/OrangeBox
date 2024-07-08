@@ -4,18 +4,15 @@ import pathlib
 import subprocess
 import time
 import threading
-import codetiming
 
 import dash
 import dash_bootstrap_components as dbc
 import diskcache
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 from dash import dcc, html, ctx
 from dash.dependencies import Input, Output, State
 from dash.long_callback import DiskcacheLongCallbackManager
-from plotly.subplots import make_subplots
 
 import utils
 
@@ -41,6 +38,7 @@ GIT_REPOS_PATHS = [
 FIGURE_SAVE_PATH = pathlib.Path.home() / "OrangeBox/status"
 ENERGY_PATH = MEASUREMENT_PATH / "Power"
 DEFAULT_PLOT_WINDOW = 2
+DEFAULT_PLOT_SAMPLES = 500
 CALL_TRACKER = utils.TimestampMonitor(num_intervals=3, interval_len=10)
 CALL_TRACKER_LOCK = threading.Lock()
 
@@ -625,6 +623,16 @@ def reboot_button(n_clicks):
     return True
 
 
+@app.callback(
+    Output("time-select", "invalid"),
+    Input("time-select", "value"),
+)
+def validate_time_select(value):
+    if value is None:
+        return True
+    return False
+
+
 # Modal callbacks
 #################
 @app.callback(
@@ -782,23 +790,18 @@ def read_dataframe(data_dir, time_window, fmt=None):
     Output("mu_plot", "figure"),
     Output("energy_plot", "figure"),
     Output("env_plot", "figure"),
-    Output("time-select", "invalid"),
     Input("plot-interval", "n_intervals"),
-    Input("sensor-select", "value"),
-    Input("time-select", "value"),
-    Input("data-path-store", "data"),
+    State("sensor-select", "value"),
+    State("time-select", "value"),
+    State("data-path-store", "data"),
 )
 def update_plots(n, sensor_select, time_select, data_path):
-    print(f"Start {n}, {ctx.triggered_id=}")
-    t_total = codetiming.Timer(logger=None)
-    t_total.start()
-    fig_data = {}
-    power_data = {}
-    fig_env = {}
-    time_select_invalid = True
+    fig_data = dict()
+    fig_power = dict()
+    fig_env = dict()
     
     if time_select is None:
-        return fig_data, power_data, fig_env, time_select_invalid
+        raise dash.exceptions.PreventUpdate
 
     if sensor_select.startswith("CYB"):
         sensor_type = "MU"
@@ -828,52 +831,56 @@ def update_plots(n, sensor_select, time_select, data_path):
     else:
         sensor_type = ""
         data_fields = []
+     
+    # With longer selected time windows, we need to downsample the data to keep the plot responsive.   
+    resample = f"{round(time_select * 3600 / DEFAULT_PLOT_SAMPLES)}s"
 
     # MEASUREMENT DATA PLOT
-    t_meas_df = codetiming.Timer(logger=None)
-    t_meas_plot = codetiming.Timer(logger=None)
     if sensor_type:
-        t_meas_df.start()
         data_dir = pathlib.Path(data_path) / sensor_type / sensor_select
         df = read_dataframe(data_dir, {"seconds": int(time_select*3600)}, fmt="%Y-%m-%d %H:%M:%S:%f")
-        t_meas_df.stop()
-        t_meas_plot.start()
         if df is not None:
+            df = df.resample(resample, on="datetime").mean().dropna()
             if data_fields == "all":
                 data_fields = df.columns.to_list()
                 data_fields.remove("datetime")
-
-            fig_data = px.line(
-                df,
-                x="datetime",
-                y=data_fields,
-                title="Measurement Data",
-                template="plotly",
+                
+            fig_data = dict(
+                data=[
+                    go.Scatter(
+                        x=df.index,
+                        y=df[field],
+                        name=field,
+                        mode="lines",
+                    ) 
+                    for field in data_fields
+                ],
+                layout=go.Layout(
+                    title_text="Measurement Data",
+                    xaxis=dict(title="datetime"),
+                    yaxis=dict(title="values"),
+                    plot_bgcolor="#E5ECF6",
+                    # Prevent the plot from changing user interaction settings (zoom, pan, etc.)
+                    # Not well documented. Probably any value will work as long as it's constant.
+                    uirevision="constant",
+                )
             )
-            # Prevent the plot from changing user interaction settings (zoom, pan, etc.)
-            # Not well documented. Probably any value will work as long as it's constant.
-            fig_data["layout"]["uirevision"] = "constant"
-        t_meas_plot.stop()
-
+            
     # ENERGY DATA PLOT
-    t_ene_df = codetiming.Timer(logger=None)
-    t_ene_plot2 = codetiming.Timer(logger=None)
-    t_ene_df.start()
     df = read_dataframe(ENERGY_PATH, {"seconds": int(time_select*3600)})
-    t_ene_df.stop()
     if df is not None:
-        t_ene_plot2.start()
+        df = df.resample(resample, on="datetime").mean().dropna()
         fig_power = dict(
             data=[
                 go.Scatter(
-                    x=df["datetime"],
+                    x=df.index,
                     y=df["bus_voltage_battery"],
                     name="Voltage battery",
                     mode="lines",
                     line_color="red",
                 ),
                 go.Scatter(
-                    x=df["datetime"],
+                    x=df.index,
                     y=df["bus_voltage_solar"],
                     name="Voltage solar",
                     mode="lines",
@@ -881,7 +888,7 @@ def update_plots(n, sensor_select, time_select, data_path):
                     line=dict(dash="dash"),
                 ),
                 go.Scatter(
-                    x=df["datetime"],
+                    x=df.index,
                     y=df["current_battery"],
                     name="Current battery",
                     mode="lines",
@@ -889,7 +896,7 @@ def update_plots(n, sensor_select, time_select, data_path):
                     yaxis="y2",
                 ),
                 go.Scatter(
-                    x=df["datetime"],
+                    x=df.index,
                     y=df["current_solar"],
                     name="Current solar",
                     mode="lines",
@@ -918,26 +925,24 @@ def update_plots(n, sensor_select, time_select, data_path):
                     xanchor="right",
                     x=1
                 ),
-                uirevision="constant", 
+                plot_bgcolor="#E5ECF6",
+                uirevision="constant",
             )
         )
-        t_ene_plot2.stop()
         
     # TEMP & HUMIDITY PLOT
     if df is not None and "temperature" in df.columns and "humidity" in df.columns:
-        t_tmp_plot = codetiming.Timer(logger=None)
-        t_tmp_plot.start()
         fig_env = dict(
             data=[
                 go.Scatter(
-                    x=df["datetime"],
+                    x=df.index,
                     y=df["temperature"],
                     name="temperature",
                     mode="lines",
                     line_color="red",
                 ),
                 go.Scatter(
-                    x=df["datetime"],
+                    x=df.index,
                     y=df["humidity"],
                     name="humidity",
                     mode="lines",
@@ -965,16 +970,13 @@ def update_plots(n, sensor_select, time_select, data_path):
                     xanchor="right",
                     x=1
                 ),
-                uirevision="constant", 
+                plot_bgcolor="#E5ECF6",
+                uirevision="constant",
             )
         )
-        t_tmp_plot.stop()
         
-    t_total.stop()
-    print(f"{t_total.last=}\n{t_meas_df.last=}\n{t_meas_plot.last=}\n{t_ene_df.last=}\n{t_ene_plot2.last=}\n{t_tmp_plot.last=}\nEnd {n}\n")
-
     # Return the updated figures
-    return fig_data, fig_power, fig_env, not time_select_invalid
+    return fig_data, fig_power, fig_env
 
 
 # Run the app
@@ -982,5 +984,5 @@ if __name__ == "__main__":
     logging.getLogger('werkzeug').setLevel(logging.ERROR)
     utils.setup_logger('user_app', level=logging.INFO)
     
-    app.run_server(host="0.0.0.0", debug=False)
+    app.run_server(host="0.0.0.0", debug=True)
     # app.run_server(host='0.0.0.0', port=8050)
