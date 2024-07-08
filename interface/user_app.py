@@ -9,12 +9,10 @@ import dash
 import dash_bootstrap_components as dbc
 import diskcache
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 from dash import dcc, html, ctx
 from dash.dependencies import Input, Output, State
 from dash.long_callback import DiskcacheLongCallbackManager
-from plotly.subplots import make_subplots
 
 import utils
 
@@ -41,6 +39,7 @@ GIT_REPOS_PATHS = [
 FIGURE_SAVE_PATH = pathlib.Path.home() / "OrangeBox/status"
 ENERGY_PATH = MEASUREMENT_PATH / "Power"
 DEFAULT_PLOT_WINDOW = 2
+DEFAULT_PLOT_SAMPLES = 500
 CALL_TRACKER = utils.TimestampMonitor(num_intervals=3, interval_len=10)
 CALL_TRACKER_LOCK = threading.Lock()
 
@@ -652,6 +651,16 @@ def select_sensor_devices(values):
     return values, "+".join(values)
         
 
+@app.callback(
+    Output("time-select", "invalid"),
+    Input("time-select", "value"),
+)
+def validate_time_select(value):
+    if value is None:
+        return True
+    return False
+
+
 # Modal callbacks
 #################
 @app.callback(
@@ -809,20 +818,18 @@ def read_dataframe(data_dir, time_window, fmt=None):
     Output("mu_plot", "figure"),
     Output("energy_plot", "figure"),
     Output("env_plot", "figure"),
-    Output("time-select", "invalid"),
     Input("plot-interval", "n_intervals"),
-    Input("sensor-select", "value"),
-    Input("time-select", "value"),
-    Input("data-path-store", "data"),
+    State("sensor-select", "value"),
+    State("time-select", "value"),
+    State("data-path-store", "data"),
 )
 def update_plots(n, sensor_select, time_select, data_path):
-    fig_data = {}
-    fig_power = {}
-    fig_env = {}
-    time_select_invalid = True
+    fig_data = dict()
+    fig_power = dict()
+    fig_env = dict()
     
     if time_select is None:
-        return fig_data, fig_power, fig_env, time_select_invalid
+        raise dash.exceptions.PreventUpdate
 
     if sensor_select.startswith("CYB"):
         sensor_type = "MU"
@@ -852,110 +859,152 @@ def update_plots(n, sensor_select, time_select, data_path):
     else:
         sensor_type = ""
         data_fields = []
+     
+    # With longer selected time windows, we need to downsample the data to keep the plot responsive.   
+    resample = f"{round(time_select * 3600 / DEFAULT_PLOT_SAMPLES)}s"
 
     # MEASUREMENT DATA PLOT
     if sensor_type:
         data_dir = pathlib.Path(data_path) / sensor_type / sensor_select
         df = read_dataframe(data_dir, {"seconds": int(time_select*3600)}, fmt="%Y-%m-%d %H:%M:%S:%f")
         if df is not None:
+            df = df.resample(resample, on="datetime").mean().dropna()
             if data_fields == "all":
                 data_fields = df.columns.to_list()
                 data_fields.remove("datetime")
-
-            fig_data = px.line(
-                df,
-                x="datetime",
-                y=data_fields,
-                title="Measurement Data",
-                template="plotly",
+                
+            fig_data = dict(
+                data=[
+                    go.Scatter(
+                        x=df.index,
+                        y=df[field],
+                        name=field,
+                        mode="lines",
+                    ) 
+                    for field in data_fields
+                ],
+                layout=go.Layout(
+                    title_text="Measurement Data",
+                    xaxis=dict(title="datetime"),
+                    yaxis=dict(title="values"),
+                    plot_bgcolor="#E5ECF6",
+                    # Prevent the plot from changing user interaction settings (zoom, pan, etc.)
+                    # Not well documented. Probably any value will work as long as it's constant.
+                    uirevision="constant",
+                )
             )
-            # Prevent the plot from changing user interaction settings (zoom, pan, etc.)
-            # Not well documented. Probably any value will work as long as it's constant.
-            fig_data["layout"]["uirevision"] = "constant"
-
+            
     # ENERGY DATA PLOT
     df = read_dataframe(ENERGY_PATH, {"seconds": int(time_select*3600)})
     if df is not None:
-        fig_power = make_subplots(specs=[[{"secondary_y": True}]])
-        fig_power.add_trace(
-            go.Scatter(
-                x=df["datetime"],
-                y=df["bus_voltage_solar"],
-                name="bus_voltage_solar",
-                mode="lines",
-                line_color="red",
-                line=dict(dash="dash"),
-            ),
-            secondary_y=False,
+        df = df.resample(resample, on="datetime").mean().dropna()
+        fig_power = dict(
+            data=[
+                go.Scatter(
+                    x=df.index,
+                    y=df["bus_voltage_battery"],
+                    name="Voltage battery",
+                    mode="lines",
+                    line_color="red",
+                ),
+                go.Scatter(
+                    x=df.index,
+                    y=df["bus_voltage_solar"],
+                    name="Voltage solar",
+                    mode="lines",
+                    line_color="red",
+                    line=dict(dash="dash"),
+                ),
+                go.Scatter(
+                    x=df.index,
+                    y=df["current_battery"],
+                    name="Current battery",
+                    mode="lines",
+                    line_color="blue",
+                    yaxis="y2",
+                ),
+                go.Scatter(
+                    x=df.index,
+                    y=df["current_solar"],
+                    name="Current solar",
+                    mode="lines",
+                    line_color="blue",
+                    line=dict(dash="dash"),
+                    yaxis="y2",
+                ),
+            ],
+            layout=go.Layout(
+                title_text="Energy Consumption",
+                xaxis=dict(title="datetime"),
+                yaxis=dict(
+                    title="voltage [V]",
+                    color="red",
+                ),
+                yaxis2=dict(
+                    title="current [mA]",
+                    color="blue",
+                    overlaying="y",
+                    side="right",
+                ),
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
+                ),
+                plot_bgcolor="#E5ECF6",
+                uirevision="constant",
+            )
         )
-        fig_power.add_trace(
-            go.Scatter(
-                x=df["datetime"],
-                y=df["current_solar"],
-                name="current_solar",
-                mode="lines",
-                line_color="blue",
-                line=dict(dash="dash"),
-            ),
-            secondary_y=True,
-        )
-        fig_power.add_trace(
-            go.Scatter(
-                x=df["datetime"],
-                y=df["bus_voltage_battery"],
-                name="bus_voltage_battery",
-                mode="lines",
-                line_color="red",
-            ),
-            secondary_y=False,
-        )
-        fig_power.add_trace(
-            go.Scatter(
-                x=df["datetime"],
-                y=df["current_battery"],
-                name="current_battery",
-                mode="lines",
-                line_color="blue",
-            ),
-            secondary_y=True,
-        )
-        fig_power.update_layout(title_text="Energy Consumption")
-        fig_power.update_xaxes(title_text="datetime")
-        fig_power.update_yaxes(title_text="voltage [V]", color="red", secondary_y=False)
-        fig_power.update_yaxes(title_text="current [mA]", color="blue", secondary_y=True)
-        fig_power["layout"]["uirevision"] = "constant"
         
     # TEMP & HUMIDITY PLOT
     if df is not None and "temperature" in df.columns and "humidity" in df.columns:
-        fig_env = make_subplots(specs=[[{"secondary_y": True}]])
-        fig_env.add_trace(
-            go.Scatter(
-                x=df["datetime"],
-                y=df["temperature"],
-                name="temperature",
-                mode="lines",
-                line_color="red",
-            ),
-            secondary_y=False,
+        fig_env = dict(
+            data=[
+                go.Scatter(
+                    x=df.index,
+                    y=df["temperature"],
+                    name="temperature",
+                    mode="lines",
+                    line_color="red",
+                ),
+                go.Scatter(
+                    x=df.index,
+                    y=df["humidity"],
+                    name="humidity",
+                    mode="lines",
+                    line_color="blue",
+                    yaxis="y2",
+                ),
+            ],
+            layout=go.Layout(
+                title_text="Temp. & Humidity inside the box",
+                xaxis=dict(title="datetime"),
+                yaxis=dict(
+                    title="temperature [°C]",
+                    color="red",
+                ),
+                yaxis2=dict(
+                    title="humidity [%]",
+                    color="blue",
+                    overlaying="y",
+                    side="right",
+                ),
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
+                ),
+                plot_bgcolor="#E5ECF6",
+                uirevision="constant",
+            )
         )
-        fig_env.add_trace(
-            go.Scatter(
-                x=df["datetime"],
-                y=df["humidity"],
-                name="humidity",
-                mode="lines",
-                line_color="blue",
-            ),
-            secondary_y=True,
-        )
-        fig_env.update_layout(title_text="Temp. & Humidity inside the box")
-        fig_env.update_xaxes(title_text="datetime")
-        fig_env.update_yaxes(title_text="temperature [°C]", color="red", secondary_y=False)
-        fig_env.update_yaxes(title_text="humidity [%]", color="blue", secondary_y=True)
-        fig_env["layout"]["uirevision"] = "constant"
-
+        
     # Return the updated figures
-    return fig_data, fig_power, fig_env, not time_select_invalid
+    return fig_data, fig_power, fig_env
 
 
 # Run the app
