@@ -886,9 +886,13 @@ def update_plots(n, sensor_select, time_select, data_path):
                 data=[
                     go.Scatter(
                         x=df.index,
-                        y=df[field],
+                        y=(df[field]-df[field].min())/(df[field].max()-df[field].min()),
+                        customdata=df[field],
                         name=field,
                         mode="lines",
+                        hovertemplate = 
+                            "%{x}<br>" +
+                            "%{customdata}",
                     ) 
                     for field in data_fields
                 ],
