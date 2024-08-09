@@ -11,8 +11,8 @@ sources:
       -
     scripts:
       - pip3 install -e .
-  - repo: git@github.com:WatchPlant/BLE_Sink.git
-    name: BLE_Sink
+  - repo: git@github.com:WatchPlant/BLE_Bleak.git
+    name: BLE_Bleak
     rev: main
     type: git
     params:
