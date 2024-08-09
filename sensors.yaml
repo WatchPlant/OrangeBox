@@ -65,7 +65,7 @@ windows:
     <%- if args[0] == "all" or args[0].include?("BLE") %>
     - BLE:
         - cd drivers/BLE_Bleak
-        - BLE_main_multipleDevices2ch.py
+        - python3 BLE_main_multipleDevices2ch.py
     <%- end %>   
 
     <%- if args[0] == "all" or args[0].include?("ZB") %>
