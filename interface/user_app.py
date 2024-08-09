@@ -33,7 +33,7 @@ ZIP_FILE_PATH = pathlib.Path.home() / "data"
 GIT_REPOS_PATHS = [
     pathlib.Path.home() / "OrangeBox",
     pathlib.Path.home() / "OrangeBox/drivers/mu_interface",
-    pathlib.Path.home() / "OrangeBox/drivers/BLE_Sink",
+    pathlib.Path.home() / "OrangeBox/drivers/BLE_Bleak",
     pathlib.Path.home() / "OrangeBox/drivers/Zigbee_Sink"
 ]
 FIGURE_SAVE_PATH = pathlib.Path.home() / "OrangeBox/status"
@@ -850,7 +850,7 @@ def update_plots(n, sensor_select, time_select, data_path):
             "RMS_CH2",
             "transpiration",
         ]
-    elif sensor_select.startswith("PN"):
+    elif sensor_select.startswith("P"):
         sensor_type = "BLE"
         data_fields = "all"
     elif sensor_select.startswith("Z"):
@@ -880,7 +880,7 @@ def update_plots(n, sensor_select, time_select, data_path):
                 df = df.resample(resample).mean().dropna()
             if data_fields == "all":
                 data_fields = df.columns.to_list()
-                data_fields.remove("datetime")
+                #data_fields.remove("datetime")
                 
             fig_data = dict(
                 data=[
