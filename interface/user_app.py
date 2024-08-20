@@ -521,7 +521,7 @@ def refresh_infoPane(value):
     wifi_config = utils.parse_config_file(WIFI_FILE)
     wifi_name = wifi_config.get("SSID", "N/A")
     wifi_password = wifi_config.get("PASS", "N/A")
-    
+
     hashes = utils.get_git_versions(GIT_REPOS_PATHS)
     versions = ["Version:"] + [item for pair in zip([html.Br()]*len(hashes), hashes) for item in pair]
 
@@ -578,7 +578,7 @@ def new_experiment(n_clicks, hostname):
 )
 def start_stop_experiment(start, stop, run_mode):
     button_id = ctx.triggered_id if not None else ""
-    
+
     if button_id == "start-experiment":
         subprocess.run(f"tmuxinator start -p ~/OrangeBox/sensors.yaml {run_mode}", shell=True)
         return False, True, True, False
@@ -607,14 +607,20 @@ def download_data(n_clicks):
     return dcc.send_file(f"{ZIP_FILE_PATH}.zip")
 
 @app.callback(
-    Output("dummy-div-other", "children", allow_duplicate=True),
+    Output("orange_box-freq", "value"),
     Output("notify-modal", "is_open", allow_duplicate=True),
     Input("orange_box-freq", "value"),
-    prevent_initial_call=True,
+    prevent_initial_call="initial_duplicate"
 )
 def update_measure_freq(value):
+    if ctx.triggered_id is None:
+        result = subprocess.run("grep '^export MEAS_INT=' ~/.bashrc | cut -d'=' -f2",
+                                shell=True, capture_output=True, text=True)
+        value = int(result.stdout.strip())
+        return value, False
+
     subprocess.run(f"sed -i 's/MEAS_INT=.*/MEAS_INT={value}/' ~/.bashrc", shell=True)
-    return None, True
+    return value, True
 
 
 @app.callback(
@@ -646,10 +652,10 @@ def select_sensor_devices(values):
     if ctx.triggered_id is None:
         values = utils.read_extra_config(EXTRA_CONFIG_FILE)
         return values, "+".join(values)
-    
+
     utils.write_extra_config(values, EXTRA_CONFIG_FILE)
     return values, "+".join(values)
-        
+
 
 @app.callback(
     Output("time-select", "invalid"),
@@ -789,7 +795,7 @@ def update_storages(n, data_path, old_value):
         return options, old_value if old_value in filtered_nodes else ""
     else:
         return options, ""
-    
+
 
 
 @app.callback(
@@ -834,7 +840,7 @@ def update_plots(n, sensor_select, time_select, data_path):
     fig_data = dict()
     fig_power = dict()
     fig_env = dict()
-    
+
     if time_select is None:
         raise dash.exceptions.PreventUpdate
 
@@ -866,8 +872,8 @@ def update_plots(n, sensor_select, time_select, data_path):
     else:
         sensor_type = ""
         data_fields = []
-     
-    # With longer selected time windows, we need to downsample the data to keep the plot responsive.   
+
+    # With longer selected time windows, we need to downsample the data to keep the plot responsive.
     resample = f"{round(time_select * 3600 / DEFAULT_PLOT_SAMPLES)}s"
 
     # MEASUREMENT DATA PLOT
@@ -881,7 +887,7 @@ def update_plots(n, sensor_select, time_select, data_path):
             if data_fields == "all":
                 data_fields = df.columns.to_list()
                 #data_fields.remove("datetime")
-                
+
             fig_data = dict(
                 data=[
                     go.Scatter(
@@ -889,7 +895,7 @@ def update_plots(n, sensor_select, time_select, data_path):
                         y=df[field],
                         name=field,
                         mode="lines",
-                    ) 
+                    )
                     for field in data_fields
                 ],
                 layout=go.Layout(
@@ -902,7 +908,7 @@ def update_plots(n, sensor_select, time_select, data_path):
                     uirevision="constant",
                 )
             )
-            
+
     # ENERGY DATA PLOT
     df = read_dataframe(ENERGY_PATH, {"seconds": int(time_select*3600)})
     if df is not None:
@@ -968,7 +974,7 @@ def update_plots(n, sensor_select, time_select, data_path):
                 uirevision="constant",
             )
         )
-        
+
     # TEMP & HUMIDITY PLOT
     if df is not None and "temperature" in df.columns and "humidity" in df.columns:
         fig_env = dict(
@@ -1013,7 +1019,7 @@ def update_plots(n, sensor_select, time_select, data_path):
                 uirevision="constant",
             )
         )
-        
+
     # Return the updated figures
     return fig_data, fig_power, fig_env
 
@@ -1022,6 +1028,6 @@ def update_plots(n, sensor_select, time_select, data_path):
 if __name__ == "__main__":
     logging.getLogger('werkzeug').setLevel(logging.ERROR)
     utils.setup_logger('user_app', level=logging.INFO)
-    
+
     app.run_server(host="0.0.0.0", debug=False)
     # app.run_server(host='0.0.0.0', port=8050)
