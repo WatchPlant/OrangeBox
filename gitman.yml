@@ -39,7 +39,7 @@ groups:
 sources_locked:
   - repo: git@github.com:WatchPlant/mu_interface.git
     name: mu_interface
-    rev: ea97245a4aeaab61b1e3827dfb18db29251e02ae
+    rev: 5eb16670dbd264cfa92593109882d19c34cfc448
     type: git
     params:
     sparse_paths:
@@ -62,6 +62,17 @@ sources_locked:
   - repo: git@github.com:WatchPlant/Zigbee_Sink.git
     name: Zigbee_Sink
     rev: 5d3afd515159fde5e1c9d0b3fed866f946df9de2
+    type: git
+    params:
+    sparse_paths:
+      -
+    links:
+      -
+    scripts:
+      -
+  - repo: git@github.com:WatchPlant/BLE_Bleak.git
+    name: BLE_Bleak
+    rev: 70447198263ce3bcec7064fa6ff1c94a1d2217e1
     type: git
     params:
     sparse_paths:
