@@ -51,22 +51,22 @@ windows:
             - CYB1:
                 - cd drivers/mu_interface/mu_interface/Sensor
                 - python3 main.py --port /dev/CYB1 --addr $SINK --dir $MEAS_DIR --int $MEAS_INT --multi
-            - CYB2: 
+            - CYB2:
                 - cd drivers/mu_interface/mu_interface/Sensor
                 - python3 main.py --port /dev/CYB2 --addr $SINK --dir $MEAS_DIR --int $MEAS_INT --multi
-            - CYB3: 
+            - CYB3:
                 - cd drivers/mu_interface/mu_interface/Sensor
                 - python3 main.py --port /dev/CYB3 --addr $SINK --dir $MEAS_DIR --int $MEAS_INT --multi
-            - CYB4: 
+            - CYB4:
                 - cd drivers/mu_interface/mu_interface/Sensor
                 - python3 main.py --port /dev/CYB4 --addr $SINK --dir $MEAS_DIR --int $MEAS_INT --multi
     <%- end %>
 
     <%- if args[0] == "all" or args[0].include?("BLE") %>
     - BLE:
-        - cd drivers/BLE_Bleak --OB_activate 1
-        - python3 BLE_main_multipleDevices2ch.py
-    <%- end %>   
+        - cd drivers/BLE_Bleak
+        - python3 BLE_main_multipleDevices2ch.py --OB_activate
+    <%- end %>
 
     <%- if args[0] == "all" or args[0].include?("ZB") %>
     - ZigBee:

@@ -72,7 +72,7 @@ sources_locked:
       -
   - repo: git@github.com:WatchPlant/BLE_Bleak.git
     name: BLE_Bleak
-    rev: 70447198263ce3bcec7064fa6ff1c94a1d2217e1
+    rev: 58b5833ab8a8d8a3823051294bc7678b17d0f847
     type: git
     params:
     sparse_paths:
