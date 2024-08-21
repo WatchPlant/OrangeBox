@@ -10,8 +10,8 @@ echo "[BUILDING] Button monitor"
 cd "${SCRIPT_DIR}/button_monitor/"
 bash build.sh
 
-echo "[INSTALLING] Telegram bot"
-cd "${SCRIPT_DIR}/telegram_bot/"
-pip3 install -e .
+# echo "[INSTALLING] Telegram bot"
+# cd "${SCRIPT_DIR}/telegram_bot/"
+# pip3 install -e .
 
 cd "${CURRENT_DIR}"
