@@ -39,7 +39,7 @@ groups:
 sources_locked:
   - repo: git@github.com:WatchPlant/mu_interface.git
     name: mu_interface
-    rev: 5eb16670dbd264cfa92593109882d19c34cfc448
+    rev: b72015f9d7f7a3040c259f264cef27570e6871ad
     type: git
     params:
     sparse_paths:
@@ -72,7 +72,7 @@ sources_locked:
       -
   - repo: git@github.com:WatchPlant/BLE_Bleak.git
     name: BLE_Bleak
-    rev: 58b5833ab8a8d8a3823051294bc7678b17d0f847
+    rev: fd212ddf49c93e2f255465511450b17a0e849444
     type: git
     params:
     sparse_paths:

@@ -1,3 +1,4 @@
+import datetime
 import logging
 import os
 import pathlib
@@ -26,7 +27,6 @@ CUSTOM_DATA_FIELDS_FILE = (
 WIFI_FILE = pathlib.Path.home() / "OrangeBox/config/orange_box.config"
 EXP_NUMBER_FILE = pathlib.Path.home() / "OrangeBox/status/experiment_number.txt"
 EXTRA_CONFIG_FILE = pathlib.Path.home() / "extra_config.sh"
-ACTIVE_DEVICES_PATH = pathlib.Path.home() / "OrangeBox/status/measuring/"
 MEASUREMENT_PATH = pathlib.Path.home() / "measurements"
 TEMP_ZIP_PATH = pathlib.Path.home() / "merged_measurements"
 ZIP_FILE_PATH = pathlib.Path.home() / "data"
@@ -783,10 +783,14 @@ def toggle_warn_modal(n_clicks, is_open):
 )
 def update_storages(n, data_path, old_value):
     experiment_path = pathlib.Path(data_path)
+    filtered_nodes = []
     try:
-        nodes = [node.name for node_type in experiment_path.iterdir() for node in node_type.iterdir()]
-        active_nodes = [node.name.split("_")[0] for node in ACTIVE_DEVICES_PATH.iterdir()]
-        filtered_nodes = [node for node in nodes if node in active_nodes]
+        for node_type in experiment_path.iterdir():
+            for node in node_type.iterdir():
+                last_modified = max(file.stat().st_mtime for file in node.iterdir())
+
+                if (datetime.datetime.now() - datetime.datetime.fromtimestamp(last_modified)).total_seconds() < 30:
+                    filtered_nodes.append(node.name)
     except FileNotFoundError:
         return [], ""
 
@@ -795,7 +799,6 @@ def update_storages(n, data_path, old_value):
         return options, old_value if old_value in filtered_nodes else ""
     else:
         return options, ""
-
 
 
 @app.callback(
@@ -857,7 +860,7 @@ def update_plots(n, sensor_select, time_select, data_path):
             "transpiration",
         ]
     elif sensor_select.startswith("P"):
-        sensor_type = "BLE"
+        sensor_type = ""  # FIXME: Silently ignores PhytoNodes because their data files are too big for memory
         data_fields = "all"
     elif sensor_select.startswith("Z"):
         sensor_type = "Zigbee"
