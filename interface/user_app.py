@@ -860,7 +860,7 @@ def update_plots(n, sensor_select, time_select, data_path):
             "transpiration",
         ]
     elif sensor_select.startswith("P"):
-        sensor_type = ""  # FIXME: Silently ignores PhytoNodes because their data files are too big for memory
+        sensor_type = "BLE"
         data_fields = "all"
     elif sensor_select.startswith("Z"):
         sensor_type = "Zigbee"
