@@ -820,8 +820,9 @@ def read_dataframe(data_dir, time_window, fmt=None):
     try:
         file_names = os.listdir(data_dir)
         file_names.sort()
-        df = pd.read_csv(data_dir / file_names[-1])
-        df["datetime"] = pd.to_datetime(df["datetime"], format=fmt)
+        df = pd.read_csv(data_dir / file_names[-1], on_bad_lines="warn")
+        df["datetime"] = pd.to_datetime(df["datetime"], format=fmt, errors="coerce")
+        df.dropna(inplace=True)
         if time_window is not None:
             df = df.loc[df["datetime"] > pd.Timestamp.now() - pd.Timedelta(**time_window)]
         return df
