@@ -30,6 +30,17 @@ def get_hostname():
         return "Unknown"
 
 
+def load_subscribers(input_file):
+    try:
+        with open(input_file, "r") as file:
+            existing_ids = yaml.safe_load(file)
+            if existing_ids is None:
+                existing_ids = {}
+    except FileNotFoundError:
+        existing_ids = {}
+    return existing_ids
+
+
 ## Bot initialization
 welcome_message = """
     Welcome to the Telegram Bot!
@@ -40,10 +51,12 @@ welcome_message = """
     /power_plot - Generate a plot based on the data.
     /subscribe - Recieve update messages from the bot.
     /unsubscribe - Unsubscribe from update messages.
+    /warnings [on/off] - Enable or disable warning messages.
     /status - Get the current status of the Orange Box.
 """
 
 subscribers_file = pathlib.Path(__file__).parent / "subscribers.txt"
+new_subscribers_file = pathlib.Path(__file__).parent / "subscribers.yaml"
 tokens_file = pathlib.Path(__file__).parent / "tokens.yaml"
 
 with open(tokens_file, "r") as file:
@@ -53,18 +66,34 @@ with open(tokens_file, "r") as file:
 bot = telebot.TeleBot(bot_token)
 
 
+## Upgrade the subscribers file from .txt to .yaml.
+def upgrade_subscribers_file():
+    if new_subscribers_file.exists() or not subscribers_file.exists():
+        return
+
+    with open(subscribers_file, "r") as old_file:
+        subscribers = [line.strip() for line in old_file.readlines()]
+
+    subscribers_config = {str(id): {"subscribed": True} for id in subscribers}
+
+    with open(new_subscribers_file, "w") as new_file:
+        yaml.dump(subscribers_config, new_file)
+
+    subscribers_file.unlink()
+
+
 ##  Broadcast message to all subscribers.
 def broadcast_message(message):
     # You can import the bot from anywhere and use it to send messages,
     # but only one bot can receive messages from users.
     # https://github.com/eternnoir/pyTelegramBotAPI/issues/1253#issuecomment-894232944
-    try:
-        with open(subscribers_file, "r") as file:
-            subscribers = [line.strip() for line in file.readlines()]
-    except FileNotFoundError:
-        subscribers = []
+    subscribers = load_subscribers(new_subscribers_file)
 
     for id in subscribers:
+        if not subscribers[id]["subscribed"]:
+            continue
+        if message.startswith("[Warning]") and not subscribers[id].get("warnings", False):
+            continue
         bot.send_message(id, message)
         print(f"Broadcast sent: {message}")
 
@@ -83,40 +112,65 @@ def handle_help(message):
 
 @bot.message_handler(commands=["subscribe"])
 def handle_add_id(message):
-    try:
-        with open(subscribers_file, "r") as file:
-            existing_ids = [line.strip() for line in file.readlines()]
-    except FileNotFoundError:
-        existing_ids = []
+    existing_ids = load_subscribers(new_subscribers_file)
 
-    with open(subscribers_file, "a") as file:
-        id = message.chat.id
-        if str(id) not in existing_ids:
-            file.write(str(id) + "\n")
-            bot.reply_to(message, "Subscribed")
-            print(f"New subscriber: {id}")
+    id = str(message.chat.id)
+    if id in existing_ids and existing_ids[id]["subscribed"]:
+        bot.reply_to(message, "Already subscribed")
+        print(f"Already subscribed: {id}")
+    else:
+        if id not in existing_ids:
+            existing_ids[id] = {"subscribed": True}
         else:
-            bot.reply_to(message, "Already subscribed")
-            print(f"Already subscribed: {id}")
+            existing_ids[id]["subscribed"] = True
+        with open(new_subscribers_file, "w") as file:
+            yaml.dump(existing_ids, file)
+        bot.reply_to(message, "Subscribed")
+        print(f"Subscribed: {id}")
 
 
 @bot.message_handler(commands=["unsubscribe"])
 def handle_remove_id(message):
-    try:
-        with open(subscribers_file, "r") as file:
-            existing_ids = [line.strip() for line in file.readlines()]
-    except FileNotFoundError:
-        existing_ids = []
+    existing_ids = load_subscribers(new_subscribers_file)
 
-    if str(message.chat.id) in existing_ids:
-        existing_ids.remove(str(message.chat.id))
-        with open(subscribers_file, "w") as file:
-            file.writelines(existing_ids)
-        bot.reply_to(message, "Unsubscribed")
-        print(f"Unsubscribed: {message.chat.id}")
-    else:
+    id = str(message.chat.id)
+    if id not in existing_ids or not existing_ids[id]["subscribed"]:
         bot.reply_to(message, "Not subscribed")
-        print(f"Not subscribed: {message.chat.id}")
+        print(f"Not subscribed: {id}")
+    else:
+        if id in existing_ids:
+            existing_ids[id]["subscribed"] = False
+        else:
+            existing_ids[id] = {"subscribed": False}
+        with open(new_subscribers_file, "w") as file:
+            yaml.dump(existing_ids, file)
+        bot.reply_to(message, "Unsubscribed")
+        print(f"Unsubscribed: {id}")
+
+
+@bot.message_handler(commands=["warnings"])
+def handle_warnings(message):
+    existing_ids = load_subscribers(new_subscribers_file)
+
+    id = str(message.chat.id)
+    if id not in existing_ids or not existing_ids[id]["subscribed"]:
+        bot.reply_to(message, "You are not subscribed. Warning messages are disabled by default.")
+        print(f"You are not subscribed. Warning messages are disabled by default: {id}")
+    else:
+        if len(message.text.split()) != 2:
+            bot.reply_to(message, "Please specify 'on' or 'off'.")
+            return
+
+        command = message.text.split()[1].lower()
+        if command not in ["on", "off"]:
+            bot.reply_to(message, "Invalid input. Please specify 'on' or 'off'.")
+            return
+
+        existing_ids[id]["warnings"] = command == "on"
+        with open(new_subscribers_file, "w") as file:
+            yaml.dump(existing_ids, file)
+        bot.reply_to(message, f"Warning messages {command}.")
+        print(f"Warning messages {command}: {id}")
 
 
 @bot.message_handler(commands=["status"])
@@ -217,6 +271,8 @@ listener_thread.daemon = True
 if __name__ == "__main__":
     first_pass = True
     listener_thread.start()
+
+    upgrade_subscribers_file()
 
     while True:
         sleep(1)

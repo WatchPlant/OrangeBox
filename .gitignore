@@ -7,7 +7,7 @@ status/
 system/led_driver/led_driver
 system/button_monitor/button_monitor
 system/telegram_bot/telegram_bot.egg-info
-system/telegram_bot/telegram_bot/subscribers.txt
+system/telegram_bot/telegram_bot/subscribers.*
 system/telegram_bot/telegram_bot/tokens.yaml
 config/orange_box.config
 interface/cache/
