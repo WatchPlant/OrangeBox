@@ -3,7 +3,6 @@ import pathlib
 import socket
 import subprocess
 import time
-from collections import deque
 from datetime import datetime
 from pathlib import Path
 
@@ -14,6 +13,7 @@ from adafruit_ina219 import INA219, ADCResolution, BusVoltageRange
 from adafruit_shtc3 import SHTC3
 from mu_interface.Utilities.data2csv import data2csv
 from mu_interface.Utilities.utils import TimeFormat
+from safety_monitor import BatteryVoltageCheck, BatteryLevel, ChargingState, BatteryCurrentCheck, TemperatureCheck
 
 
 ## Parse arguments.
@@ -67,13 +67,11 @@ csv_object = data2csv(file_path, file_name, "energy")
 csv_object.fix_ownership()
 last_time = datetime.now()
 
-## Battery monitoring
-batt_history = deque(maxlen=10)
-batt_status = "OK"
-BATT_RECOVER = 3.8
-BATT_LOW1 = 3.7
-BATT_LOW2 = 3.6
-BATT_CRIT = 3.5
+## Monitoring and checking.
+voltage_monitor = BatteryVoltageCheck()
+current_monitor = BatteryCurrentCheck()
+temperature_monitor = TemperatureCheck()
+
 shutdown_script = pathlib.Path.home() / "OrangeBox/scripts/shutdown.sh"
 
 ## Set up ZMQ publisher.
@@ -91,19 +89,20 @@ try:
         bus_voltage_battery = round(ina219_battery.bus_voltage, 2)    # voltage on V- (load side)
         current_battery = round(ina219_battery.current, 1)            # current in mA
 
-        batt_history.append(bus_voltage_battery)
-
-        if all(val < BATT_CRIT for val in batt_history):
+        voltage_monitor.update(bus_voltage_battery)
+        battery_level = voltage_monitor.check()
+        if battery_level == BatteryLevel.CRIT:
             zmq_socket.send_string("Battery Voltage Is Critically Low. Shutting Down!")
             subprocess.run(str(shutdown_script.resolve()), shell=True)
-        if batt_status == "OK" and all(val < BATT_LOW1 for val in batt_history):
-            zmq_socket.send_string("Battery Voltage Is Low (<= 3.7 V).")
-            batt_status = "LOW1"
-        elif batt_status == "LOW1" and all(val < BATT_LOW2 for val in batt_history):
-            zmq_socket.send_string("Battery Voltage Is Low (<= 3.6 V).")
-            batt_status = "LOW2"
-        elif batt_status in ["LOW1", "LOW2"] and all(val > BATT_RECOVER for val in batt_history):
-            batt_status = "OK"
+        elif battery_level == BatteryLevel.LOW1:
+            zmq_socket.send_string(f"Battery Voltage Is Low (<= {BatteryLevel.LOW1.value} V).")
+        elif battery_level == BatteryLevel.LOW2:
+            zmq_socket.send_string(f"Battery Voltage Is Low (<= {BatteryLevel.LOW2.value} V).")
+
+        current_monitor.update(current_battery)
+        charging_state = current_monitor.check()
+        if charging_state == ChargingState.DANGER:
+            zmq_socket.send_string("Battery Charging Current Is Unexpectedly High!")
 
         temperature = 0
         humidity = 0
@@ -114,6 +113,9 @@ try:
                 print(f"Temperature: {temperature} °C, Humidity: {humidity} %")
             except Exception as e:
                 print(f"Error reading temperature and humidity: {e}")
+
+            if not temperature_monitor.check(temperature):
+                zmq_socket.send_string(f"Temperature Inside The Box Is High! ({temperature} °C)")
 
         # Publish data over ZMQ.
         payload = [
