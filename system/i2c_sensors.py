@@ -90,14 +90,15 @@ try:
         current_battery = round(ina219_battery.current, 1)            # current in mA
 
         voltage_monitor.update(bus_voltage_battery)
-        battery_level = voltage_monitor.check()
-        if battery_level == BatteryLevel.CRIT:
-            zmq_socket.send_string("Battery Voltage Is Critically Low. Shutting Down!")
-            subprocess.run(str(shutdown_script.resolve()), shell=True)
-        elif battery_level == BatteryLevel.LOW1:
-            zmq_socket.send_string(f"Battery Voltage Is Low (<= {BatteryLevel.LOW1.value} V).")
-        elif battery_level == BatteryLevel.LOW2:
-            zmq_socket.send_string(f"Battery Voltage Is Low (<= {BatteryLevel.LOW2.value} V).")
+        state_changed, battery_level = voltage_monitor.check()
+        if state_changed:
+            if battery_level == BatteryLevel.CRIT:
+                zmq_socket.send_string("Battery Voltage Is Critically Low. Shutting Down!")
+                subprocess.run(str(shutdown_script.resolve()), shell=True)
+            elif battery_level == BatteryLevel.LOW1:
+                zmq_socket.send_string(f"Battery Voltage Is Low (<= {BatteryLevel.LOW1.value} V).")
+            elif battery_level == BatteryLevel.LOW2:
+                zmq_socket.send_string(f"Battery Voltage Is Low (<= {BatteryLevel.LOW2.value} V).")
 
         current_monitor.update(current_battery)
         charging_state = current_monitor.check()

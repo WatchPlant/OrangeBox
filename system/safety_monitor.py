@@ -20,17 +20,22 @@ class BatteryVoltageCheck(object):
         self.buffer.append(value)
 
     def check(self):
+        state_changed = False
         if all(val < BatteryLevel.CRIT.value for val in self.buffer):
             self.status = BatteryLevel.CRIT
+            state_changed = True
         elif self.status == BatteryLevel.OK and all(val < BatteryLevel.LOW1.value for val in self.buffer):
             self.status = BatteryLevel.LOW1
+            state_changed = True
         elif self.status == BatteryLevel.LOW1 and all(val < BatteryLevel.LOW2.value for val in self.buffer):
             self.status = BatteryLevel.LOW2
+            state_changed = True
         elif self.status in [BatteryLevel.LOW1, BatteryLevel.LOW2] \
                 and all(val > BatteryLevel.RECOVER.value for val in self.buffer):
             self.status = BatteryLevel.OK
+            state_changed = True
 
-        return self.status
+        return state_changed, self.status
 
 
 class ChargingState(enum.Enum):

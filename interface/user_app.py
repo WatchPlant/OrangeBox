@@ -787,10 +787,12 @@ def update_storages(n, data_path, old_value):
     try:
         for node_type in experiment_path.iterdir():
             for node in node_type.iterdir():
-                last_modified = max(file.stat().st_mtime for file in node.iterdir())
+                file_modification_times = [file.stat().st_mtime for file in node.iterdir()]
+                if file_modification_times:
+                    last_modified = max(file.stat().st_mtime for file in node.iterdir())
 
-                if (datetime.datetime.now() - datetime.datetime.fromtimestamp(last_modified)).total_seconds() < 30:
-                    filtered_nodes.append(node.name)
+                    if (datetime.datetime.now() - datetime.datetime.fromtimestamp(last_modified)).total_seconds() < 30:
+                        filtered_nodes.append(node.name)
     except FileNotFoundError:
         return [], ""
 
