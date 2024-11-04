@@ -250,26 +250,23 @@ def send_plot(message):
     bot.reply_to(message, "Sorry, this feature is currently unavailable.")
 
 
-## ZMQ subscriber
-zmq_context = zmq.Context()
-zmq_socket = zmq_context.socket(zmq.SUB)
-zmq_socket.bind("tcp://127.0.0.1:5556")
-zmq_socket.subscribe(b"")
-zmq_socket.poll(timeout=0)
-
-
 def zmq_listener():
     while True:
         message = zmq_socket.recv_string()
         broadcast_message(message)
 
 
-listener_thread = threading.Thread(target=zmq_listener)
-listener_thread.daemon = True
-
-
 if __name__ == "__main__":
+    ## ZMQ subscriber
+    zmq_context = zmq.Context()
+    zmq_socket = zmq_context.socket(zmq.SUB)
+    zmq_socket.bind("tcp://127.0.0.1:5556")
+    zmq_socket.subscribe(b"")
+    zmq_socket.poll(timeout=0)
+
     first_pass = True
+    listener_thread = threading.Thread(target=zmq_listener)
+    listener_thread.daemon = True
     listener_thread.start()
 
     upgrade_subscribers_file()
