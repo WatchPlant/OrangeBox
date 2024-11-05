@@ -902,7 +902,7 @@ def update_plots(n, sensor_select, time_select, data_path):
                         name=field,
                         mode="lines",
                     )
-                    for field in data_fields
+                    for field in data_fields if field in df
                 ],
                 layout=go.Layout(
                     title_text="Measurement Data",
