@@ -26,7 +26,7 @@ def get_ip_address():
         return s.getsockname()[0]
     except OSError:
         return "127.0.0.1"
-    
+
 def get_hostname():
     return socket.gethostname()
 
@@ -44,7 +44,7 @@ def parse_config_file(file_path):
                 line = line.replace("export ", "")
                 key, value = line.split("=")
                 config[key] = value.replace("\"", "")
-    
+
     return config
 
 def write_config_file(file_path, wifi_ssid, wifi_pass, sink_ip="127.0.0.1"):
@@ -56,7 +56,7 @@ def write_config_file(file_path, wifi_ssid, wifi_pass, sink_ip="127.0.0.1"):
 def update_experiment_number(file_path, skip_update=False):
     with open(file_path, "r") as f:
         experiment_number = int(f.read().strip())
-        
+
     if not skip_update:
         experiment_number += 1
         with open(file_path, "w") as f:
@@ -75,17 +75,17 @@ def read_data_fields_from_file(file_path):
 def save_date_fields_to_file(config, file_path):
     with open(file_path, 'w') as file:
         yaml.dump(config, file)
-        
+
 def read_extra_config(file_path):
     try:
         with open(file_path, 'r') as file:
             config = file.read().strip().split("=")[1].strip('"')
     except FileNotFoundError:
         config = "MU"
-        
+
     if config == "":
         config = "MU"
-    
+
     if config == "all":
         return ["MU", "BLE", "ZB"]
     return config.split("+")
@@ -94,7 +94,7 @@ def write_extra_config(values, file_path):
     with open(file_path, 'w') as file:
         config = "+".join(values)
         file.write(f'export RUN_MODE="{config}"')
-        
+
 def get_git_versions(paths):
     out = []
     for path in reversed(paths):
@@ -180,21 +180,21 @@ class TimestampMonitor():
         self.interval_len = interval_len
         self.num_intervals = num_intervals
         self.timestamps = collections.deque(maxlen=(num_intervals + 1) * 5)
-        
+
     def update_and_check(self):
         now = time.time()
         num_calls = 0
         for entry in self.timestamps:
             if now - entry < self.num_intervals * self.interval_len:
                 num_calls += 1
-        
+
         self.timestamps.append(now)
-        
+
         if num_calls / self.num_intervals > 1.5:
             return False, num_calls
-        
+
         return True, num_calls
-    
+
     def reset(self):
         self.timestamps.clear()
 
@@ -211,7 +211,7 @@ class ColoredFormatter(logging.Formatter):
         'CRITICAL': "\033[31m",
         'ERROR': "\033[31m",
     }
-    
+
     def __init__(self, fmt=None, datefmt=None):
         logging.Formatter.__init__(self, fmt, datefmt)
 
@@ -228,7 +228,7 @@ class ColoredFormatter(logging.Formatter):
 
 def setup_logger(name, level=logging.INFO):
     Path('logs').mkdir(exist_ok=True)
-    
+
     logFormatter = logging.Formatter("[%(asctime)s] [%(levelname)s]: %(message)s", '%d.%m.%Y. %H:%M:%S')
     colorFormatter = ColoredFormatter("[%(asctime)s] [%(levelname)s]: %(message)s", '%d.%m.%Y. %H:%M:%S')
     rootLogger = logging.getLogger()
