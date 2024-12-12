@@ -10,15 +10,16 @@ def is_stressed(data, sensor):
     elif sensor == "ros-ozone":
         return data > 19.8
     else:
-        raise ValueError(f"Unknown sensor: {sensor}")
+        return None
 
 
 def find_negative_drop(derivatives):
     long_window = 10
     short_window = 3
-    for i in range(0, len(derivatives) - long_window):
+    # Find index for which derivatives in next long_window steps are all negative or very negative in short_window.
+    for i in range(1, len(derivatives) - long_window):
         if all(derivatives.iloc[i : i + long_window] < -0.01) or all(derivatives.iloc[i : i + short_window] < -0.1):
-            return i
+            return i - 1
 
 
 def lp_filter(data, alpha):
@@ -28,7 +29,7 @@ def lp_filter(data, alpha):
     return smoothed
 
 
-def analyze(timestamps, data):
+def analyze(timestamps, data, electrode, stress):
     smoothing_alpha = 0.2
     experiment_duration = 200  # seconds
     traces = []
@@ -37,11 +38,11 @@ def analyze(timestamps, data):
 
     # Smooth the data using a low-pass first-order filter.
     smoothed = lp_filter(data, smoothing_alpha)
-    traces.append(go.Scatter(x=timestamps, y=smoothed, mode="lines", name="Smooth"))
+    # traces.append(go.Scatter(x=timestamps, y=smoothed, mode="lines", name="Smooth"))
 
     # Compute the derivative of the smoothed data.
     derivative = smoothed.diff().fillna(0)
-    traces.append(go.Scatter(x=timestamps, y=derivative, mode="lines", name="Derivative"))
+    # traces.append(go.Scatter(x=timestamps, y=derivative, mode="lines", name="Derivative"))
 
     # Find the index of the sudden drop in the derivative.
     trigger_index = find_negative_drop(derivative)
@@ -82,8 +83,17 @@ def analyze(timestamps, data):
             )
 
             # Add status rectangle
-            status = "STRESSED" if is_stressed(future_value, "aba-water") else "GOOD"
-            color = "green" if status == "GOOD" else "red"
+            test = f"{electrode.lower()}-{stress.lower()}"
+            stressed = is_stressed(future_value, test)
+            if stressed is None:
+                status = "INVALID CONFIG"
+                color = "gray"
+            elif stressed:
+                status = "STRESSED"
+                color = "red"
+            else:
+                status = "GOOD"
+                color = "green"
             annotations.append(
                 dict(
                     x=1,

@@ -375,6 +375,41 @@ liveDataSettingsPane = dbc.Row(
     align="center",
 )
 
+sapSensorConfigPane = dbc.Row(
+    [
+        dbc.Col(
+            [
+                html.Label("Electrode type:"),
+                dbc.RadioItems(
+                    options=[
+                        {"label": "ABA", "value": "ABA"},
+                        {"label": "ROS", "value": "ROS"},
+                    ],
+                    value="ABA",
+                    id="sap-sensor-electrode",
+                )
+            ],
+            width="auto",
+        ),
+        dbc.Col(
+            [
+                html.Label("Stress source:"),
+                dbc.RadioItems(
+                    options=[
+                        {"label": "Ozone", "value": "ozone"},
+                        {"label": "Water", "value": "water"},
+                    ],
+                    value="ozone",
+                    id="sap-sensor-stress",
+                )
+            ],
+            width="auto",
+        ),
+    ],
+    justify="start",
+    # style={"display": "block"},
+)
+
 # Set up the Dash app
 cache = diskcache.Cache("./cache")
 long_callback_manager = DiskcacheLongCallbackManager(cache)
@@ -431,6 +466,7 @@ app.layout = dbc.Container(
             [dbc.Col([html.H3("Live data plotting")], width=True)],
         ),
         liveDataSettingsPane,
+        dbc.Collapse([sapSensorConfigPane], id="sap-sensor-config", is_open=False),
         # Live plot graph
         dbc.Row(
             [
@@ -650,7 +686,7 @@ def reboot_button(n_clicks):
     Output("run-mode-store", "data"),
     Input("sensors-mode-checklist", "value"),
 )
-def select_sensor_devices(values):
+def select_mu_sensors(values):
     if ctx.triggered_id is None:
         values = utils.read_extra_config(EXTRA_CONFIG_FILE)
         return values, "+".join(values)
@@ -658,6 +694,15 @@ def select_sensor_devices(values):
     utils.write_extra_config(values, EXTRA_CONFIG_FILE)
     return values, "+".join(values)
 
+
+@app.callback(
+    Output("sap-sensor-config", "is_open"),
+    Input("sensor-select", "value"),
+)
+def toggle_sap_sensor_config(sensor_select):
+    if sensor_select.startswith("S"):
+        return True
+    return False
 
 @app.callback(
     Output("time-select", "invalid"),
@@ -847,8 +892,10 @@ def read_dataframe(data_dir, time_column="datetime", time_window=None, fmt=None)
     State("sensor-select", "value"),
     State("time-select", "value"),
     State("data-path-store", "data"),
+    State("sap-sensor-electrode", "value"),
+    State("sap-sensor-stress", "value"),
 )
-def update_plots(n, sensor_select, time_select, data_path):
+def update_plots(n, sensor_select, time_select, data_path, sap_sensor_electrode, sap_sensor_stress):
     fig_data = dict()
     fig_power = dict()
     fig_env = dict()
@@ -912,7 +959,7 @@ def update_plots(n, sensor_select, time_select, data_path):
             shapes = []
             annotations = []
             if sensor_type == "SAP":
-                traces, shapes, annotations = sap_analysis.analyze(df.index, df[data_fields[0]])
+                traces, shapes, annotations = sap_analysis.analyze(df.index, df[data_fields[0]], sap_sensor_electrode, sap_sensor_stress)
 
             fig_data = dict(
                 data=[
@@ -1057,5 +1104,5 @@ if __name__ == "__main__":
     logging.getLogger('werkzeug').setLevel(logging.ERROR)
     utils.setup_logger('user_app', level=logging.INFO)
 
-    app.run_server(host="0.0.0.0", debug=True)
+    app.run_server(host="0.0.0.0", debug=False)
     # app.run_server(host='0.0.0.0', port=8050)
