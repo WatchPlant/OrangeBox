@@ -16,6 +16,7 @@ from dash.dependencies import Input, Output, State
 from dash.long_callback import DiskcacheLongCallbackManager
 
 import utils
+import sap_analysis
 
 # Constants
 DEFAULT_DATA_FIELDS_FILE = (
@@ -40,6 +41,7 @@ FIGURE_SAVE_PATH = pathlib.Path.home() / "OrangeBox/status"
 ENERGY_PATH = MEASUREMENT_PATH / "Power"
 DEFAULT_PLOT_WINDOW = 2
 DEFAULT_PLOT_SAMPLES = 500
+DEFAULT_PLOT_INTERVAL = 10 * 1000
 CALL_TRACKER = utils.TimestampMonitor(num_intervals=3, interval_len=10)
 CALL_TRACKER_LOCK = threading.Lock()
 
@@ -168,6 +170,7 @@ configPane = dbc.Col(
                             {"label": "Blue boxes (MU)", "value": "MU"},
                             {"label": "Phytonodes", "value": "BLE"},
                             {"label": "Zigbee nodes", "value": "ZB"},
+                            {"label": "Sap sensor", "value": "SAP"},
                         ],
                         value=[],
                         id="sensors-mode-checklist",
@@ -373,6 +376,41 @@ liveDataSettingsPane = dbc.Row(
     align="center",
 )
 
+sapSensorConfigPane = dbc.Row(
+    [
+        dbc.Col(
+            [
+                html.Label("Electrode type:"),
+                dbc.RadioItems(
+                    options=[
+                        {"label": "ABA", "value": "ABA"},
+                        {"label": "ROS", "value": "ROS"},
+                    ],
+                    value="ABA",
+                    id="sap-sensor-electrode",
+                )
+            ],
+            width="auto",
+        ),
+        dbc.Col(
+            [
+                html.Label("Stress source:"),
+                dbc.RadioItems(
+                    options=[
+                        {"label": "Ozone", "value": "ozone"},
+                        {"label": "Water", "value": "water"},
+                    ],
+                    value="ozone",
+                    id="sap-sensor-stress",
+                )
+            ],
+            width="auto",
+        ),
+    ],
+    justify="start",
+    # style={"display": "block"},
+)
+
 # Set up the Dash app
 cache = diskcache.Cache("./cache")
 long_callback_manager = DiskcacheLongCallbackManager(cache)
@@ -429,6 +467,7 @@ app.layout = dbc.Container(
             [dbc.Col([html.H3("Live data plotting")], width=True)],
         ),
         liveDataSettingsPane,
+        dbc.Collapse([sapSensorConfigPane], id="sap-sensor-config", is_open=False),
         # Live plot graph
         dbc.Row(
             [
@@ -460,7 +499,7 @@ app.layout = dbc.Container(
         # Auto refresh
         dcc.Interval(
             id="plot-interval",
-            interval=10 * 1000,
+            interval=DEFAULT_PLOT_INTERVAL,
             n_intervals=0,
         ),
         dcc.Interval(
@@ -648,7 +687,7 @@ def reboot_button(n_clicks):
     Output("run-mode-store", "data"),
     Input("sensors-mode-checklist", "value"),
 )
-def select_sensor_devices(values):
+def select_mu_sensors(values):
     if ctx.triggered_id is None:
         values = utils.read_extra_config(EXTRA_CONFIG_FILE)
         return values, "+".join(values)
@@ -656,6 +695,16 @@ def select_sensor_devices(values):
     utils.write_extra_config(values, EXTRA_CONFIG_FILE)
     return values, "+".join(values)
 
+
+@app.callback(
+    Output("sap-sensor-config", "is_open"),
+    Output("plot-interval", "interval"),
+    Input("sensor-select", "value"),
+)
+def toggle_sap_sensor_config(sensor_select):
+    if sensor_select.startswith("S"):
+        return True, 5 * 1000
+    return False, DEFAULT_PLOT_INTERVAL
 
 @app.callback(
     Output("time-select", "invalid"),
@@ -787,10 +836,11 @@ def update_storages(n, data_path, old_value):
     try:
         for node_type in experiment_path.iterdir():
             for node in node_type.iterdir():
-                file_modification_times = [file.stat().st_mtime for file in node.iterdir()]
-                if file_modification_times:
-                    last_modified = max(file.stat().st_mtime for file in node.iterdir())
-
+                file_names = os.listdir(node)
+                if file_names:
+                    file_names.sort()
+                    latest_file = node / file_names[-1]
+                    last_modified = latest_file.stat().st_mtime
                     if (datetime.datetime.now() - datetime.datetime.fromtimestamp(last_modified)).total_seconds() < 30:
                         filtered_nodes.append(node.name)
     except FileNotFoundError:
@@ -818,16 +868,20 @@ def update_connections(n, is_open):
     return is_open
 
 
-def read_dataframe(data_dir, time_window, fmt=None):
+def read_dataframe(data_dir, time_column="datetime", time_window=None, fmt=None):
     try:
         file_names = os.listdir(data_dir)
         file_names.sort()
         df = pd.read_csv(data_dir / file_names[-1], on_bad_lines="warn")
-        df["datetime"] = pd.to_datetime(df["datetime"], format=fmt, errors="coerce")
         df.dropna(inplace=True)
-        if time_window is not None:
-            df = df.loc[df["datetime"] > pd.Timestamp.now() - pd.Timedelta(**time_window)]
+
+        # For experiments with elapsed time instead of datetime, don't filter by the given time window.
+        if time_column == "datetime":
+            df["datetime"] = pd.to_datetime(df["datetime"], format=fmt, errors="coerce")
+            if time_window is not None:
+                df = df.loc[df["datetime"] > pd.Timestamp.now() - pd.Timedelta(**time_window)]
         return df
+
     except (FileNotFoundError, IndexError):
         logging.error("File for live plotting not found.")
         return None
@@ -838,11 +892,13 @@ def read_dataframe(data_dir, time_window, fmt=None):
     Output("energy_plot", "figure"),
     Output("env_plot", "figure"),
     Input("plot-interval", "n_intervals"),
-    State("sensor-select", "value"),
+    Input("sensor-select", "value"),
     State("time-select", "value"),
     State("data-path-store", "data"),
+    State("sap-sensor-electrode", "value"),
+    State("sap-sensor-stress", "value"),
 )
-def update_plots(n, sensor_select, time_select, data_path):
+def update_plots(n, sensor_select, time_select, data_path, sap_sensor_electrode, sap_sensor_stress):
     fig_data = dict()
     fig_power = dict()
     fig_env = dict()
@@ -850,6 +906,9 @@ def update_plots(n, sensor_select, time_select, data_path):
     if time_select is None:
         raise dash.exceptions.PreventUpdate
 
+    x_axis_column = "datetime"
+    x_axis_name = "datetime"
+    y_axis_name = "values"
     if sensor_select.startswith("CYB"):
         sensor_type = "MU"
         data_fields = [
@@ -875,6 +934,12 @@ def update_plots(n, sensor_select, time_select, data_path):
             "mag_Y",
             "mag_Z"
         ]
+    elif sensor_select.startswith("S"):
+        sensor_type = "SAP"
+        data_fields = "all"
+        x_axis_column = "elapsed"
+        x_axis_name = "time [s]"
+        y_axis_name = "current [mA]"
     else:
         sensor_type = ""
         data_fields = []
@@ -885,14 +950,19 @@ def update_plots(n, sensor_select, time_select, data_path):
     # MEASUREMENT DATA PLOT
     if sensor_type:
         data_dir = pathlib.Path(data_path) / sensor_type / sensor_select
-        df = read_dataframe(data_dir, {"seconds": int(time_select*3600)}, fmt="%Y-%m-%d %H:%M:%S:%f")
+        df = read_dataframe(data_dir, x_axis_column, {"seconds": int(time_select*3600)}, fmt="%Y-%m-%d %H:%M:%S:%f")
         if df is not None:
-            df.set_index("datetime", inplace=True)
-            if len(df) > DEFAULT_PLOT_SAMPLES:
+            df.set_index(x_axis_column, inplace=True)
+            if sensor_type != "SAP" and len(df) > DEFAULT_PLOT_SAMPLES:
                 df = df.resample(resample).mean().dropna()
             if data_fields == "all":
                 data_fields = df.columns.to_list()
-                #data_fields.remove("datetime")
+
+            traces = []
+            shapes = []
+            annotations = []
+            if sensor_type == "SAP":
+                traces, shapes, annotations = sap_analysis.analyze(df.index, df[data_fields[0]], sap_sensor_electrode, sap_sensor_stress)
 
             fig_data = dict(
                 data=[
@@ -903,11 +973,13 @@ def update_plots(n, sensor_select, time_select, data_path):
                         mode="lines",
                     )
                     for field in data_fields if field in df
-                ],
+                ] + traces,
                 layout=go.Layout(
+                    shapes=shapes,
+                    annotations=annotations,
                     title_text="Measurement Data",
-                    xaxis=dict(title="datetime"),
-                    yaxis=dict(title="values"),
+                    xaxis=dict(title=x_axis_name),
+                    yaxis=dict(title=y_axis_name),
                     plot_bgcolor="#E5ECF6",
                     # Prevent the plot from changing user interaction settings (zoom, pan, etc.)
                     # Not well documented. Probably any value will work as long as it's constant.
@@ -916,7 +988,7 @@ def update_plots(n, sensor_select, time_select, data_path):
             )
 
     # ENERGY DATA PLOT
-    df = read_dataframe(ENERGY_PATH, {"seconds": int(time_select*3600)})
+    df = read_dataframe(ENERGY_PATH, time_window={"seconds": int(time_select*3600)})
     if df is not None:
         df.set_index("datetime", inplace=True)
         if len(df) > DEFAULT_PLOT_SAMPLES:
