@@ -74,4 +74,10 @@ windows:
         - python3 DataSink.py --dir $MEAS_DIR
     <%- end %>
 
+    <%- if args[0] == "all" or args[0].include?("SAP") %>
+    - EmStat:
+        - cd drivers/EmStat_Bleak
+        - python3 arduino_main.py --dir $MEAS_DIR
+    <%- end %>
+
 

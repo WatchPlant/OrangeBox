@@ -1,16 +1,19 @@
 import plotly.graph_objects as go
-import pandas as pd
 
 
-def is_stressed(data, sensor):
-    if sensor == "aba-water":
-        return data < -2.65
-    elif sensor == "aba-ozone":
-        return data < -0.66
-    elif sensor == "ros-ozone":
-        return data > 19.8
-    else:
-        return None
+def is_stressed(data0, data1, sample, stress):
+    if sample == "ros" and stress == "water":
+        return None, None
+
+    if sample == "aba":
+        data_delta = abs(data1 - data0)
+        if stress == "water":
+            return data_delta < 2.65, data_delta
+        else:  # stress == "ozone"
+            return data_delta < 0.66, data_delta
+    else:  # sample == "ros"
+        concentration = (data1 + 0.0084) / 0.0156
+        return concentration > 19.8, concentration
 
 
 def find_negative_drop(derivatives):
@@ -29,9 +32,12 @@ def lp_filter(data, alpha):
     return smoothed
 
 
-def analyze(timestamps, data, electrode, stress):
+def analyze(timestamps, data, sample, stress):
+    sample = sample.lower()
+    stress = stress.lower()
+
     smoothing_alpha = 0.2
-    experiment_duration = 200  # seconds
+    experiment_duration = 30 if sample == "aba" else 60  # seconds
     traces = []
     shapes = []
     annotations = []
@@ -49,6 +55,7 @@ def analyze(timestamps, data, electrode, stress):
 
     if trigger_index:
         trigger_time = timestamps[trigger_index]
+        trigger_value = data[trigger_index]
         shapes.append(
             dict(
                 type="line",
@@ -69,22 +76,30 @@ def analyze(timestamps, data, electrode, stress):
         if future_index < len(timestamps):
             future_time = timestamps[future_index]
             future_value = data[future_index]
+            # Add decision point annotation
             traces.append(
                 go.Scatter(
-                    x=[future_time],
-                    y=[future_value],
-                    mode="markers+text",
-                    marker=dict(color="red", size=10),
-                    text=[f"{future_value}"],
-                    textposition="top center",
-                    textfont=dict(size=16),
-                    name="Decision Point",
+                    x=[future_time, future_time],
+                    y=[trigger_value, future_value],
+                    mode='lines+markers',
+                    line=dict(color='red'),
+                    marker=dict(line_color='red', size=15, symbol='line-ew', line_width=2),
+                    name='Height Difference'
+                )
+            )
+            annotations.append(
+                dict(
+                    x=future_time,
+                    y=(trigger_value + future_value) / 2,
+                    text=f'Value: {trigger_value - future_value:.2f}',
+                    showarrow=False,
+                    font=dict(size=12, color='black'),
+                    bgcolor='white'
                 )
             )
 
             # Add status rectangle
-            test = f"{electrode.lower()}-{stress.lower()}"
-            stressed = is_stressed(future_value, test)
+            stressed, value = is_stressed(trigger_value, future_value, sample, stress)
             if stressed is None:
                 status = "INVALID CONFIG"
                 color = "gray"

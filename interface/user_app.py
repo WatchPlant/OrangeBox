@@ -41,6 +41,7 @@ FIGURE_SAVE_PATH = pathlib.Path.home() / "OrangeBox/status"
 ENERGY_PATH = MEASUREMENT_PATH / "Power"
 DEFAULT_PLOT_WINDOW = 2
 DEFAULT_PLOT_SAMPLES = 500
+DEFAULT_PLOT_INTERVAL = 10 * 1000
 CALL_TRACKER = utils.TimestampMonitor(num_intervals=3, interval_len=10)
 CALL_TRACKER_LOCK = threading.Lock()
 
@@ -498,7 +499,7 @@ app.layout = dbc.Container(
         # Auto refresh
         dcc.Interval(
             id="plot-interval",
-            interval=10 * 1000,
+            interval=DEFAULT_PLOT_INTERVAL,
             n_intervals=0,
         ),
         dcc.Interval(
@@ -697,12 +698,13 @@ def select_mu_sensors(values):
 
 @app.callback(
     Output("sap-sensor-config", "is_open"),
+    Output("plot-interval", "interval"),
     Input("sensor-select", "value"),
 )
 def toggle_sap_sensor_config(sensor_select):
     if sensor_select.startswith("S"):
-        return True
-    return False
+        return True, 5 * 1000
+    return False, DEFAULT_PLOT_INTERVAL
 
 @app.callback(
     Output("time-select", "invalid"),
@@ -834,10 +836,11 @@ def update_storages(n, data_path, old_value):
     try:
         for node_type in experiment_path.iterdir():
             for node in node_type.iterdir():
-                file_modification_times = [file.stat().st_mtime for file in node.iterdir()]
-                if file_modification_times:
-                    last_modified = max(file.stat().st_mtime for file in node.iterdir())
-
+                file_names = os.listdir(node)
+                if file_names:
+                    file_names.sort()
+                    latest_file = node / file_names[-1]
+                    last_modified = latest_file.stat().st_mtime
                     if (datetime.datetime.now() - datetime.datetime.fromtimestamp(last_modified)).total_seconds() < 30:
                         filtered_nodes.append(node.name)
     except FileNotFoundError:
@@ -889,7 +892,7 @@ def read_dataframe(data_dir, time_column="datetime", time_window=None, fmt=None)
     Output("energy_plot", "figure"),
     Output("env_plot", "figure"),
     Input("plot-interval", "n_intervals"),
-    State("sensor-select", "value"),
+    Input("sensor-select", "value"),
     State("time-select", "value"),
     State("data-path-store", "data"),
     State("sap-sensor-electrode", "value"),
