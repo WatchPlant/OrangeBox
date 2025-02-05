@@ -33,13 +33,24 @@ sources:
       -
     scripts:
       -
+  - repo: git@github.com:WatchPlant/EmStat_Bleak.git
+    name: EmStat_Bleak
+    rev: main
+    type: git
+    params:
+    sparse_paths:
+      -
+    links:
+      -
+    scripts:
+      -
 default_group: ''
 groups:
   -
 sources_locked:
   - repo: git@github.com:WatchPlant/mu_interface.git
     name: mu_interface
-    rev: ae1c9dc94c93a5e9564d832c76ecd66c7184799d
+    rev: ae07a28b9a0fa68cfcfb9e8a6595b83a654227e8
     type: git
     params:
     sparse_paths:
@@ -48,17 +59,6 @@ sources_locked:
       -
     scripts:
       - pip3 install -e .
-  - repo: git@github.com:WatchPlant/BLE_Sink.git
-    name: BLE_Sink
-    rev: 4d904e88768935d3334f67dcdd7e4f63ed5f69d4
-    type: git
-    params:
-    sparse_paths:
-      -
-    links:
-      -
-    scripts:
-      -
   - repo: git@github.com:WatchPlant/Zigbee_Sink.git
     name: Zigbee_Sink
     rev: 5d3afd515159fde5e1c9d0b3fed866f946df9de2
@@ -72,7 +72,18 @@ sources_locked:
       -
   - repo: git@github.com:WatchPlant/BLE_Bleak.git
     name: BLE_Bleak
-    rev: 897a525de8b19b200d8cb2dd0ee71d3ecb0ede92
+    rev: e59679b2cb47ec5cc73b88c0a6b28d48cc0291ce
+    type: git
+    params:
+    sparse_paths:
+      -
+    links:
+      -
+    scripts:
+      -
+  - repo: git@github.com:WatchPlant/EmStat_Bleak.git
+    name: EmStat_Bleak
+    rev: de0ff57ae18f9bfaad5517d96c289b1a2e308cce
     type: git
     params:
     sparse_paths:
