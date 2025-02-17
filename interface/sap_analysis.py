@@ -35,9 +35,10 @@ def lp_filter(data, alpha):
 def analyze(timestamps, data, sample, stress):
     sample = sample.lower()
     stress = stress.lower()
+    timestamps = timestamps.to_series()
 
     smoothing_alpha = 0.2
-    experiment_duration = 30 if sample == "aba" else 60  # seconds
+    experiment_duration = 200 if sample == "aba" else 60  # seconds
     traces = []
     shapes = []
     annotations = []
@@ -50,10 +51,16 @@ def analyze(timestamps, data, sample, stress):
     derivative = smoothed.diff().fillna(0)
     # traces.append(go.Scatter(x=timestamps, y=derivative, mode="lines", name="Derivative"))
 
-    # Find the index of the sudden drop in the derivative.
-    trigger_index = find_negative_drop(derivative)
+    # print(timestamps)
+    # print(data)
 
-    if trigger_index:
+    # Find the index of the sudden drop in the derivative.
+    if sample == "aba":
+        trigger_index = find_negative_drop(derivative)
+    else:
+        trigger_index = 0
+
+    if trigger_index is not None:
         trigger_time = timestamps[trigger_index]
         trigger_value = data[trigger_index]
         shapes.append(
@@ -76,22 +83,30 @@ def analyze(timestamps, data, sample, stress):
         if future_index < len(timestamps):
             future_time = timestamps[future_index]
             future_value = data[future_index]
+
+            dec_point_min = trigger_value if sample == "aba" else min(data)
+            dec_point_max = future_value
+            annotation_val = trigger_value - future_value if sample == "aba" else future_value
+
             # Add decision point annotation
             traces.append(
                 go.Scatter(
                     x=[future_time, future_time],
-                    y=[trigger_value, future_value],
+                    y=[dec_point_min, dec_point_max],
                     mode='lines+markers',
                     line=dict(color='red'),
                     marker=dict(line_color='red', size=15, symbol='line-ew', line_width=2),
                     name='Height Difference'
                 )
             )
+
+            # print(trigger_index, trigger_time, trigger_value, target_time, future_index, future_time, future_value)
+
             annotations.append(
                 dict(
                     x=future_time,
-                    y=(trigger_value + future_value) / 2,
-                    text=f'Value: {trigger_value - future_value:.2f}',
+                    y=(dec_point_min + dec_point_max) / 2,
+                    text=f'Value: {annotation_val:.2f}',
                     showarrow=False,
                     font=dict(size=12, color='black'),
                     bgcolor='white'
