@@ -83,7 +83,7 @@ sources_locked:
       -
   - repo: git@github.com:WatchPlant/EmStat_Bleak.git
     name: EmStat_Bleak
-    rev: dff95ea093f11da0ca64710eebe63e290dcf279f
+    rev: 0487569b2e88dfea7b7b99fdee378b497ba65d72
     type: git
     params:
     sparse_paths:
